@@ -11,31 +11,32 @@ Built by StackHawk but designed for the broader Java ecosystem including Maven, 
 - Type: CLI application
 - Distribution: Single static binary (no dependencies)
 - Validation: Mozilla CA bundle from curl.se/ca/cacert.pem
+- Structure: Standard Go project layout with modular internal packages
 
 ## Build Commands
 
 ```bash
-# Development (simplified approach)
-go run main.go              # Run the tool with default settings
-go run main.go -url https://example.com  # Run with custom target URL
-go run main.go -o certs.pem # Save certificates to file
-go test -v                  # Run comprehensive tests with mock DPI simulation
+# Development (standard Go project structure)
+go run ./cmd/dpi-hawk              # Run the tool with default settings
+go run ./cmd/dpi-hawk -url https://example.com  # Run with custom target URL
+go run ./cmd/dpi-hawk -o certs.pem # Save certificates to file
+go test -v ./...               # Run comprehensive tests with mock DPI simulation
 
 # Build
-go build -o dpi-hawk main.go  # Build single binary
+go build -o dpi-hawk ./cmd/dpi-hawk  # Build single binary
 
 # Cross-platform builds (advanced)
-make build-all      # Build for all platforms
+make build-all      # Build for all platforms (if Makefile exists)
 make package        # Create release archives
 make clean          # Clean build artifacts
 ```
 
 ## Development Workflow
 
-1. Use `go run main.go -url <target>` for testing during development
-2. Use `go build -o dpi-hawk main.go` to create local binary for testing
-3. Use `go test -v` to run comprehensive functional tests with simulated DPI environments
-4. Use `make build-all` for cross-platform binaries when preparing releases
+1. Use `go run ./cmd/dpi-hawk -url <target>` for testing during development
+2. Use `go build -o dpi-hawk ./cmd/dpi-hawk` to create local binary for testing
+3. Use `go test -v ./...` to run comprehensive functional tests with simulated DPI environments
+4. Use `make build-all` for cross-platform binaries when preparing releases (if Makefile exists)
 5. Test against various corporate environments when possible
 
 ## Architecture & Design Decisions
@@ -58,16 +59,44 @@ make clean          # Clean build artifacts
 - **Flexible target URLs** - Supports custom target URLs via `-url` flag (default: 4 endpoints)
 - **PEM extraction** - Outputs unknown CA certificates in standard PEM format
 
+## Project Structure
+
+```
+dpi-hawk/
+├── cmd/
+│   └── dpi-hawk/           # Main application entry point
+│       └── main.go         # CLI interface (~125 lines)
+├── internal/               # Internal packages (not importable by other projects)
+│   ├── bundle/            # CA bundle management (~118 lines)
+│   │   └── bundle.go      # Multiple source download and cross-validation
+│   ├── analysis/          # Certificate analysis (~192 lines) 
+│   │   └── analysis.go    # Chain validation and DPI detection
+│   ├── security/          # Security validation features (~242 lines)
+│   │   └── security.go    # CT validation, behavioral analysis, CA impersonation
+│   ├── network/           # Network operations (~55 lines)
+│   │   └── network.go     # Certificate retrieval and TLS handling
+│   └── output/            # Output generation (~41 lines)
+│       └── output.go      # PEM formatting and deduplication
+├── main_test.go           # Comprehensive security validation tests (~640 lines)
+├── go.mod                 # Go module definition (github.com/kaakaww/dpi-hawk)
+├── go.sum                 # Go module checksums
+├── CLAUDE.md              # Context file for Claude Code
+├── README.md              # User documentation and usage examples
+└── .github/workflows/build.yml  # Automated testing and release building
+```
+
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `main.go` | Main CLI application (~750 lines) with advanced security validation, multiple CA bundle sources, Certificate Transparency checking, behavioral analysis, and CA impersonation detection |
-| `main_test.go` | Comprehensive security validation tests with mock CA/server certificates, CT validation tests, behavioral analysis tests, and CA impersonation detection tests |
-| `go.mod` | Go module definition - intentionally no external dependencies |
-| `Makefile` | Cross-platform build automation and packaging (optional, prefer go build) |
-| `README.md` | User documentation and usage examples |
-| `.github/workflows/build.yml` | Automated testing and release building |
+| File/Package | Purpose |
+|--------------|---------|
+| `cmd/dpi-hawk/main.go` | Main CLI application entry point - handles command-line interface, orchestrates other packages |
+| `internal/bundle/` | CA bundle management - downloads Mozilla CA bundles from multiple sources with cross-validation |
+| `internal/analysis/` | Certificate chain analysis - browser-like validation, DPI detection, trust verification |
+| `internal/security/` | Advanced security features - Certificate Transparency validation, behavioral analysis, CA impersonation detection |
+| `internal/network/` | Network operations - TLS certificate retrieval with InsecureSkipVerify |
+| `internal/output/` | Output generation - PEM formatting, certificate deduplication |
+| `main_test.go` | Comprehensive test suite with mock DPI environments and security validation tests |
+| `go.mod` | Go module definition with GitHub import path - no external dependencies |
 
 ## Testing Strategy
 
