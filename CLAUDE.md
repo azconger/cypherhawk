@@ -48,19 +48,22 @@ make clean          # Clean build artifacts
 - **Mozilla CA validation** - Uses Mozilla's trusted CA bundle for accurate MitM detection
 
 ### Key Components
-- **Mozilla CA bundle** - Downloads and compares against Mozilla's trusted certificates from curl.se
-- **Certificate chain analysis** - Compares received vs expected certificate chains using InsecureSkipVerify
+- **Multiple CA bundle sources** - Cross-validates Mozilla CA bundles from multiple sources with integrity checking
+- **Enhanced certificate chain validation** - Browser-like certificate verification with hostname validation
+- **Certificate Transparency validation** - Checks for SCT extensions in recent certificates
+- **Comprehensive behavioral analysis** - 10+ suspicious behavior indicators including weak keys, recent issuance, unusual validity periods
+- **CA impersonation detection** - Detects certificates claiming to be from legitimate CAs but with suspicious characteristics
 - **DPI vendor identification** - Recognizes major enterprise security vendors (Palo Alto, Netskope, Zscaler)
-- **Flexible target URLs** - Supports custom target URLs via `-url` flag (default: https://www.google.com)
+- **Risk scoring system** - Combines multiple security indicators for high-confidence detection
+- **Flexible target URLs** - Supports custom target URLs via `-url` flag (default: 4 endpoints)
 - **PEM extraction** - Outputs unknown CA certificates in standard PEM format
-- **Default endpoints** - Tests StackHawk services and configurable targets
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `main.go` | Main CLI application (~150 lines) with Mozilla CA bundle validation and certificate extraction |
-| `main_test.go` | Comprehensive functional tests with mock CA and server certificate generation |
+| `main.go` | Main CLI application (~750 lines) with advanced security validation, multiple CA bundle sources, Certificate Transparency checking, behavioral analysis, and CA impersonation detection |
+| `main_test.go` | Comprehensive security validation tests with mock CA/server certificates, CT validation tests, behavioral analysis tests, and CA impersonation detection tests |
 | `go.mod` | Go module definition - intentionally no external dependencies |
 | `Makefile` | Cross-platform build automation and packaging (optional, prefer go build) |
 | `README.md` | User documentation and usage examples |
@@ -69,10 +72,15 @@ make clean          # Clean build artifacts
 ## Testing Strategy
 
 ### Functional Testing (main_test.go)
-- **Sophisticated unit tests** with mock certificate generation
+- **Advanced security validation tests** with mock certificate generation
 - **Simulated DPI environment** by creating test TLS server with custom CA
-- **Mock CA and server certificates** for realistic MitM scenario testing
-- **Comprehensive validation** that tool correctly detects and extracts unknown CAs
+- **Mock CA and server certificates** for realistic MitM scenario testing  
+- **Certificate Transparency validation tests** - Verifies CT evidence checking for recent certificates
+- **Behavioral analysis tests** - Tests detection of 10+ suspicious certificate indicators
+- **CA impersonation detection tests** - Validates detection of fake certificates claiming to be from legitimate CAs
+- **Multiple CA bundle source tests** - Tests cross-validation of CA bundles from multiple sources
+- **Enhanced security validation integration tests** - Tests combined security analysis with risk scoring
+- **Comprehensive validation** that tool correctly detects and extracts unknown CAs with advanced threat detection
 - **Production-ready testing** suitable for CI/CD pipelines
 
 ### Default Test Endpoints
@@ -90,21 +98,42 @@ The tool tests against four key endpoints that represent common corporate networ
 - Reports which endpoints succeeded/failed in output
 
 ### DPI Detection
-- **Mozilla CA bundle validation** - Downloads from curl.se/ca/cacert.pem for trust comparison
-- **Certificate chain analysis** using InsecureSkipVerify to capture all certificates
+- **Multiple CA bundle sources** - Cross-validates Mozilla CA bundles from curl.se and GitHub mirror with size variance checking (up to 10% allowed)
+- **Enhanced certificate chain validation** - Browser-like certificate verification with hostname validation and complete chain analysis
+- **Certificate Transparency validation** - Checks for SCT (Signed Certificate Timestamp) extensions in certificates issued within the last 3 years
+- **Comprehensive behavioral analysis** - Detects 10+ suspicious indicators:
+  - Recent issuance patterns (< 24 hours)
+  - Unusual validity periods (> 10 years or < 7 days)
+  - Suspicious serial numbers (trivial values like "1", "123")
+  - Weak cryptographic keys (RSA < 2048 bits, ECDSA < 256 bits)
+  - Suspicious subject/issuer terms ("test", "demo", "localhost")
+  - Hostname mismatches and self-signed leaf certificates
+  - Weak signature algorithms (MD5, SHA1)
+  - Future-dated certificates and unusual chain lengths
+- **CA impersonation detection** - Identifies certificates claiming to be from legitimate CAs (Google, DigiCert, Let's Encrypt) but with suspicious characteristics
 - **Vendor identification** for major DPI providers (Palo Alto, Netskope, Zscaler, etc.)
-- **Unknown CA extraction** - Identifies certificates not in Mozilla's trusted bundle
+- **Risk scoring system** - Combines multiple suspicious indicators for high-confidence detection (3+ indicators = HIGH RISK)
+- **Unknown CA extraction** - Identifies certificates not trusted by Mozilla's CA bundle
 - **Certificate deduplication** across multiple endpoints
 
 ## Command Line Interface
 
 ```bash
 # Basic usage
-dpi-hawk                          # Use default target (https://www.google.com)
+dpi-hawk                          # Test default 4 endpoints (Google, StackHawk auth/API, AWS S3)
 dpi-hawk -url https://example.com # Test specific target URL
 dpi-hawk -o certs.pem            # Save certificates to file
 dpi-hawk -o -                    # Output certificates to stdout
+dpi-hawk --verbose               # Enable detailed security analysis output
 ```
+
+**Verbose Mode Security Output:**
+When using `--verbose`, the tool provides detailed security analysis including:
+- Certificate Transparency validation results
+- Behavioral analysis findings (weak keys, suspicious patterns, etc.)
+- Hostname validation results
+- CA impersonation detection alerts
+- Risk scoring when multiple suspicious indicators are detected
 
 ### Key Functions (main.go)
 - **Mozilla CA download** - Downloads trusted CA bundle from curl.se/ca/cacert.pem
@@ -114,28 +143,36 @@ dpi-hawk -o -                    # Output certificates to stdout
 
 ## MVP Implementation Plan
 
-**Phase 1 - Core MVP (Essential Features):**
-1. **Mozilla CA bundle integration** - Download and cache Mozilla's trusted CA bundle
-2. **Four endpoint testing** - Test against Google, StackHawk auth/API, and AWS S3 endpoints
-3. **Certificate chain extraction** - Use InsecureSkipVerify to capture all certificates
-4. **Unknown CA detection** - Compare certificates against Mozilla bundle
-5. **PEM output** - Output unknown CA certificates in standard PEM format
-6. **Robust error handling** - 30-second timeouts, graceful failure handling, clear error messages
+**✅ Phase 1 - Core MVP (Essential Features) - COMPLETED:**
+1. ✅ **Mozilla CA bundle integration** - Download and cache Mozilla's trusted CA bundle
+2. ✅ **Four endpoint testing** - Test against Google, StackHawk auth/API, and AWS S3 endpoints
+3. ✅ **Certificate chain extraction** - Use InsecureSkipVerify to capture all certificates
+4. ✅ **Unknown CA detection** - Compare certificates against Mozilla bundle
+5. ✅ **PEM output** - Output unknown CA certificates in standard PEM format
+6. ✅ **Robust error handling** - 30-second timeouts, graceful failure handling, clear error messages
 
-**Phase 2 - Enhanced Features:**
-1. **Custom target URLs** - Support `-url` flag for testing arbitrary endpoints
-2. **Verbose mode** - Detailed debugging output with `--verbose` flag
-3. **JKS conversion helper** - Documentation and examples for PEM-to-JKS conversion
-4. **DPI vendor identification** - Pattern matching for Palo Alto, Netskope, Zscaler
-5. **Certificate deduplication** - Remove duplicate certificates across endpoints
-6. **Progress indicators** - Show testing progress for multiple endpoints
+**✅ Phase 2 - Enhanced Features - COMPLETED:**
+1. ✅ **Custom target URLs** - Support `-url` flag for testing arbitrary endpoints
+2. ✅ **Verbose mode** - Detailed debugging output with `--verbose` flag
+3. ✅ **JKS conversion helper** - Documentation and examples for PEM-to-JKS conversion
+4. ✅ **DPI vendor identification** - Pattern matching for Palo Alto, Netskope, Zscaler
+5. ✅ **Certificate deduplication** - Remove duplicate certificates across endpoints
+6. ✅ **Progress indicators** - Show testing progress for multiple endpoints
 
-**Phase 3 - Advanced Features:**
+**✅ Phase 3 - Advanced Security Features - COMPLETED:**
+1. ✅ **Multiple CA bundle sources** - Cross-validate CA bundles from curl.se and GitHub mirror with integrity checking
+2. ✅ **Certificate Transparency validation** - Check for SCT extensions in certificates issued within last 3 years
+3. ✅ **Comprehensive behavioral analysis** - Detect 10+ suspicious certificate indicators (weak keys, recent issuance, unusual validity, etc.)
+4. ✅ **CA impersonation detection** - Identify certificates falsely claiming to be from legitimate CAs
+5. ✅ **Enhanced certificate chain validation** - Browser-like verification with hostname validation
+6. ✅ **Risk scoring system** - Combine multiple suspicious indicators for high-confidence detection
+
+**Phase 4 - Future Enhancements:**
 1. **Embedded CA bundle backup** - Fallback for air-gapped environments
 2. **JSON output format** - Machine-readable output option
 3. **Configuration file support** - Custom endpoint lists and settings
 4. **Proxy support** - Corporate proxy configuration
-5. **Certificate chain validation** - Advanced certificate path validation
+5. **Advanced CT log validation** - Direct querying of Certificate Transparency logs
 
 ## Common Enhancement Areas
 
@@ -198,16 +235,20 @@ mvn -Djavax.net.ssl.trustStore=dpi-hawk.jks -Djavax.net.ssl.trustStorePassword=c
 This is a **defensive security tool** designed to help users adapt to corporate security infrastructure:
 
 **Tool Security:**
-- **Legitimate purpose** - Detects and extracts CA certificates from corporate DPI/MitM proxies
-- **Mozilla CA validation** - Uses Mozilla's trusted CA bundle (curl.se/ca/cacert.pem) for accurate comparison
+- **Legitimate purpose** - Detects and extracts CA certificates from corporate DPI/MitM proxies with advanced threat analysis
+- **Multiple CA bundle validation** - Cross-validates Mozilla's trusted CA bundles from multiple sources (curl.se and GitHub mirror) with integrity checking
+- **Advanced security validation** - Combines Certificate Transparency checking, behavioral analysis, and CA impersonation detection
 - **No malicious capability** - Cannot create, modify, or bypass security controls
-- **Read-only operation** - Only extracts and outputs certificate information
+- **Read-only operation** - Only extracts and outputs certificate information with comprehensive security analysis
 
 **Network Security:**
-- **HTTPS download** - Mozilla CA bundle downloaded over secure HTTPS connection
+- **HTTPS download** - Mozilla CA bundles downloaded over secure HTTPS connections from multiple trusted sources
 - **InsecureSkipVerify usage** - Only used for certificate inspection, not for validation bypass
+- **Certificate Transparency validation** - Checks for proper CT evidence in recent certificates to detect potential forgeries
+- **Behavioral analysis protection** - Detects multiple categories of suspicious certificate characteristics
+- **CA impersonation protection** - Identifies certificates falsely claiming to be from legitimate certificate authorities
 - **No credential handling** - Tool does not store, transmit, or log any sensitive information
-- **Local operation** - All certificate analysis performed locally
+- **Local operation** - All certificate analysis performed locally with enhanced security algorithms
 
 **Data Privacy:**
 - **No telemetry** - Tool does not send usage data or certificates to external services
