@@ -97,11 +97,11 @@ func DownloadAndValidate() (*x509.CertPool, string, error) {
 		if i == 0 {
 			continue // Skip primary
 		}
-		
+
 		// Allow up to 10% variance in CA bundle sizes
 		variance := float64(abs(size-primarySize)) / float64(primarySize)
 		if variance > 0.10 {
-			return nil, "", fmt.Errorf("CA bundle size mismatch detected: %s has %d CAs vs primary %d CAs (%.1f%% variance)", 
+			return nil, "", fmt.Errorf("CA bundle size mismatch detected: %s has %d CAs vs primary %d CAs (%.1f%% variance)",
 				successfulSources[i], size, primarySize, variance*100)
 		}
 	}

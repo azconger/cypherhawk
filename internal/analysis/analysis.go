@@ -10,7 +10,7 @@ import (
 type SecurityValidationResult struct {
 	UntrustedCAs         []*x509.Certificate
 	SuspiciousBehaviors  []string
-	CTIssues            []string
+	CTIssues             []string
 	ChainValidationError error
 }
 
@@ -23,7 +23,7 @@ func ValidateChain(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostnam
 
 	// The first certificate should be the leaf certificate (server certificate)
 	leafCert := certs[0]
-	
+
 	// Build intermediate certificate pool from the remaining certificates
 	intermediates := x509.NewCertPool()
 	for i := 1; i < len(certs); i++ {
@@ -39,7 +39,7 @@ func ValidateChain(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostnam
 
 	// Try to verify the leaf certificate against the complete chain
 	_, err := leafCert.Verify(opts)
-	
+
 	if err == nil {
 		// Chain verification succeeded - this is normal, trusted certificate behavior
 		// No MITM/DPI proxy detected
@@ -49,29 +49,29 @@ func ValidateChain(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostnam
 	// Chain verification failed - this could indicate MITM/DPI proxy
 	// Return only the CA certificates that are likely from a corporate DPI proxy
 	var untrustedCAs []*x509.Certificate
-	
+
 	for _, cert := range certs {
 		if cert.IsCA && IsPotentialDPICA(cert) {
 			untrustedCAs = append(untrustedCAs, cert)
 		}
 	}
-	
+
 	return untrustedCAs
 }
 
 // IsPotentialDPICA checks if a CA certificate appears to be from a corporate DPI proxy
 func IsPotentialDPICA(cert *x509.Certificate) bool {
-	// First, check for signature forgery - detect certificates that claim to be 
+	// First, check for signature forgery - detect certificates that claim to be
 	// from legitimate CAs but aren't actually signed by them
 	if isLegitimateCAImpersonation(cert) {
 		return true // This is definitely malicious
 	}
-	
+
 	// Check for common corporate DPI/MITM proxy vendor patterns
 	commonDPIVendors := []string{
 		"Palo Alto Networks",
 		"Zscaler",
-		"Netskope", 
+		"Netskope",
 		"Fortinet",
 		"Symantec Web Security",
 		"McAfee Web Gateway",
@@ -85,7 +85,7 @@ func IsPotentialDPICA(cert *x509.Certificate) bool {
 		"Internal CA",
 		"Private CA",
 	}
-	
+
 	// Check for known legitimate CA vendors that should NOT be flagged as DPI
 	knownLegitimateVendors := []string{
 		"Google",
@@ -107,27 +107,27 @@ func IsPotentialDPICA(cert *x509.Certificate) bool {
 		"GTS",
 		"ISRG",
 	}
-	
+
 	// Check subject and issuer for patterns
 	subjectStr := cert.Subject.String()
 	issuerStr := cert.Issuer.String()
-	
+
 	// First check if this is a known legitimate vendor - if so, don't flag as DPI
 	for _, vendor := range knownLegitimateVendors {
 		if strings.Contains(strings.ToLower(subjectStr), strings.ToLower(vendor)) ||
-		   strings.Contains(strings.ToLower(issuerStr), strings.ToLower(vendor)) {
+			strings.Contains(strings.ToLower(issuerStr), strings.ToLower(vendor)) {
 			return false // This is a legitimate CA, not DPI
 		}
 	}
-	
+
 	// Check if this matches known DPI vendor patterns
 	for _, vendor := range commonDPIVendors {
 		if strings.Contains(strings.ToLower(subjectStr), strings.ToLower(vendor)) ||
-		   strings.Contains(strings.ToLower(issuerStr), strings.ToLower(vendor)) {
+			strings.Contains(strings.ToLower(issuerStr), strings.ToLower(vendor)) {
 			return true // This is likely a DPI proxy
 		}
 	}
-	
+
 	// If chain validation fails but we don't recognize the CA as either legitimate or DPI,
 	// be conservative and flag it as potential DPI
 	return true
@@ -157,7 +157,7 @@ func IsTrustedCA(cert *x509.Certificate, mozillaCAs *x509.CertPool, allCerts []*
 
 	// Try to verify the certificate against Mozilla's CA bundle with full chain context
 	_, err := cert.Verify(opts)
-	
+
 	// If verification succeeds, this CA is part of a trusted chain
 	// If verification fails, it's an unknown/untrusted CA (potential DPI)
 	return err == nil
@@ -170,7 +170,7 @@ func extractHostname(url string) string {
 	} else if strings.HasPrefix(url, "http://") {
 		url = url[7:]
 	}
-	
+
 	// Remove path and port
 	if idx := strings.Index(url, "/"); idx != -1 {
 		url = url[:idx]
@@ -178,7 +178,7 @@ func extractHostname(url string) string {
 	if idx := strings.Index(url, ":"); idx != -1 {
 		url = url[:idx]
 	}
-	
+
 	return url
 }
 
@@ -201,10 +201,10 @@ func isLegitimateCAImpersonation(cert *x509.Certificate) bool {
 		"Comodo",
 		"Sectigo",
 	}
-	
+
 	subjectStr := strings.ToLower(cert.Subject.String())
 	issuerStr := strings.ToLower(cert.Issuer.String())
-	
+
 	// Check if certificate claims to be from a legitimate CA
 	claimsLegitimateCA := false
 	for _, pattern := range legitimateCAPatterns {
@@ -213,18 +213,18 @@ func isLegitimateCAImpersonation(cert *x509.Certificate) bool {
 			break
 		}
 	}
-	
+
 	if !claimsLegitimateCA {
 		return false // Not claiming to be a legitimate CA
 	}
-	
+
 	// If it claims to be legitimate, verify the signature chain
 	// Self-signed certificates claiming to be legitimate CAs are suspicious
 	if cert.Subject.String() == cert.Issuer.String() {
 		// Self-signed certificate claiming to be from legitimate CA = impersonation
 		return true
 	}
-	
+
 	// Check for common impersonation patterns:
 	// 1. Claims to be legitimate CA but issued by unknown/suspicious issuer
 	suspiciousIssuerPatterns := []string{
@@ -239,13 +239,13 @@ func isLegitimateCAImpersonation(cert *x509.Certificate) bool {
 		"proxy",
 		"mitm",
 	}
-	
+
 	for _, pattern := range suspiciousIssuerPatterns {
 		if strings.Contains(issuerStr, pattern) {
 			return true // Legitimate CA name but suspicious issuer
 		}
 	}
-	
+
 	// Additional check: Look for certificates that claim legitimate names
 	// but have suspicious characteristics
 	if claimsLegitimateCA {
@@ -255,14 +255,14 @@ func isLegitimateCAImpersonation(cert *x509.Certificate) bool {
 		if validityPeriod < 30*24*time.Hour {
 			return true // Suspiciously short validity for claimed legitimate CA
 		}
-		
+
 		// Check for suspicious serial numbers (common in test/demo certs)
 		serialStr := cert.SerialNumber.String()
-		if serialStr == "1" || serialStr == "2" || serialStr == "123" || 
-		   len(serialStr) < 10 { // Very short serial numbers are suspicious
+		if serialStr == "1" || serialStr == "2" || serialStr == "123" ||
+			len(serialStr) < 10 { // Very short serial numbers are suspicious
 			return true
 		}
 	}
-	
+
 	return false
 }

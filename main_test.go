@@ -61,14 +61,14 @@ func TestMozillaCATrustedCertificate(t *testing.T) {
 // TestUnknownCADetection tests detection of unknown CA certificates using a mock DPI server
 func TestUnknownCADetection(t *testing.T) {
 	t.Log("=== Starting Mock DPI Server Test ===")
-	
+
 	// Create a mock CA certificate (simulating corporate DPI)
 	t.Log("Creating mock corporate CA certificate...")
 	mockCA, mockCAKey := createMockCA(t)
 	t.Logf("Mock CA created: Subject=%s, Serial=%s", mockCA.Subject.CommonName, mockCA.SerialNumber.String())
 	t.Logf("Mock CA Issuer: %s", mockCA.Issuer.CommonName)
 	t.Logf("Mock CA IsCA: %v", mockCA.IsCA)
-	
+
 	// Create a server certificate signed by the mock CA
 	t.Log("Creating server certificate signed by mock CA...")
 	serverCert, serverKey := createServerCert(t, mockCA, mockCAKey)
@@ -123,7 +123,7 @@ func TestUnknownCADetection(t *testing.T) {
 			if !trusted {
 				foundUnknownCA = true
 				t.Logf("  ✓ DETECTED UNKNOWN CA: %s", cert.Subject.CommonName)
-				
+
 				// Generate PEM output to show what would be extracted
 				pemOutput := output.GeneratePEM([]*x509.Certificate{cert})
 				t.Logf("  PEM Output Preview (first 200 chars):")
@@ -184,7 +184,7 @@ func TestPEMOutput(t *testing.T) {
 func TestCertificateDeduplication(t *testing.T) {
 	mockCA1, _ := createMockCA(t)
 	mockCA2, _ := createMockCA(t)
-	
+
 	// Create slice with duplicates
 	certs := []*x509.Certificate{mockCA1, mockCA2, mockCA1}
 
@@ -287,12 +287,12 @@ func createServerCert(t *testing.T, caCert *x509.Certificate, caKey *rsa.Private
 			PostalCode:    []string{""},
 			CommonName:    "localhost",
 		},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1)},
-		DNSNames:     []string{"localhost"},
+		NotBefore:   time.Now(),
+		NotAfter:    time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1)},
+		DNSNames:    []string{"localhost"},
 	}
 
 	// Create certificate signed by CA
@@ -357,22 +357,22 @@ func createMockDPIServer(t *testing.T, serverCert *x509.Certificate, serverKey *
 // TestWithArtifacts creates actual certificate files to show test artifacts
 func TestWithArtifacts(t *testing.T) {
 	t.Log("=== Creating Test Artifacts ===")
-	
+
 	// Create mock certificates
 	mockCA, mockCAKey := createMockCA(t)
 	serverCert, _ := createServerCert(t, mockCA, mockCAKey)
-	
+
 	// Create artifact files
 	caCertFile := "test-artifacts-ca.pem"
 	serverCertFile := "test-artifacts-server.pem"
 	combinedFile := "test-artifacts-combined.pem"
-	
+
 	defer func() {
 		os.Remove(caCertFile)
 		os.Remove(serverCertFile)
 		os.Remove(combinedFile)
 	}()
-	
+
 	// Write CA certificate
 	caOutput := output.GeneratePEM([]*x509.Certificate{mockCA})
 	err := os.WriteFile(caCertFile, []byte(caOutput), 0644)
@@ -380,15 +380,15 @@ func TestWithArtifacts(t *testing.T) {
 		t.Fatalf("Failed to write CA cert file: %v", err)
 	}
 	t.Logf("Created CA certificate file: %s", caCertFile)
-	
-	// Write server certificate 
+
+	// Write server certificate
 	serverOutput := output.GeneratePEM([]*x509.Certificate{serverCert})
 	err = os.WriteFile(serverCertFile, []byte(serverOutput), 0644)
 	if err != nil {
 		t.Fatalf("Failed to write server cert file: %v", err)
 	}
 	t.Logf("Created server certificate file: %s", serverCertFile)
-	
+
 	// Write combined certificate chain
 	combinedOutput := output.GeneratePEM([]*x509.Certificate{serverCert, mockCA})
 	err = os.WriteFile(combinedFile, []byte(combinedOutput), 0644)
@@ -396,13 +396,13 @@ func TestWithArtifacts(t *testing.T) {
 		t.Fatalf("Failed to write combined cert file: %v", err)
 	}
 	t.Logf("Created combined certificate file: %s", combinedFile)
-	
+
 	t.Log("=== Test Artifacts Created Successfully ===")
 	t.Logf("You can examine these files:")
 	t.Logf("  - CA Certificate: %s", caCertFile)
-	t.Logf("  - Server Certificate: %s", serverCertFile) 
+	t.Logf("  - Server Certificate: %s", serverCertFile)
 	t.Logf("  - Combined Chain: %s", combinedFile)
-	
+
 	// Verify files can be read
 	for _, file := range []string{caCertFile, serverCertFile, combinedFile} {
 		info, err := os.Stat(file)
@@ -417,7 +417,7 @@ func TestWithArtifacts(t *testing.T) {
 // TestLegitimateCAImpersonation tests detection of fake certificates claiming to be from legitimate CAs
 func TestLegitimateCAImpersonation(t *testing.T) {
 	t.Log("=== Testing Legitimate CA Impersonation Detection ===")
-	
+
 	// Create a certificate that claims to be from Google but is self-signed (malicious)
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -427,14 +427,14 @@ func TestLegitimateCAImpersonation(t *testing.T) {
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(123), // Suspiciously simple serial number
 		Subject: pkix.Name{
-			Organization:  []string{"Google Trust Services LLC"}, // Impersonating Google
-			Country:       []string{"US"},
-			CommonName:    "Google Trust Services CA",
+			Organization: []string{"Google Trust Services LLC"}, // Impersonating Google
+			Country:      []string{"US"},
+			CommonName:   "Google Trust Services CA",
 		},
 		Issuer: pkix.Name{
-			Organization:  []string{"Google Trust Services LLC"}, // Self-signed but claiming to be Google
-			Country:       []string{"US"},
-			CommonName:    "Google Trust Services CA",
+			Organization: []string{"Google Trust Services LLC"}, // Self-signed but claiming to be Google
+			Country:      []string{"US"},
+			CommonName:   "Google Trust Services CA",
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(7 * 24 * time.Hour), // Suspiciously short validity
@@ -480,27 +480,27 @@ func TestLegitimateCAImpersonation(t *testing.T) {
 // TestEnhancedSecurityValidation tests all the new security features
 func TestEnhancedSecurityValidation(t *testing.T) {
 	t.Log("=== Testing Enhanced Security Validation Features ===")
-	
+
 	// Test 1: Certificate Transparency validation
 	t.Log("Testing Certificate Transparency validation...")
-	
+
 	// Create a certificate without CT evidence (issued recently)
 	mockCert := createRecentCertificateWithoutCT(t)
 	ctIssues := security.ValidateCertificateTransparency([]*x509.Certificate{mockCert})
-	
+
 	if len(ctIssues) == 0 {
 		t.Error("Expected CT issues for recent certificate without CT evidence")
 	} else {
 		t.Logf("✓ CT validation detected issue: %s", ctIssues[0])
 	}
-	
+
 	// Test 2: Behavioral analysis
 	t.Log("Testing behavioral analysis...")
-	
+
 	// Create a suspicious certificate
 	suspiciousCert := createSuspiciousCertificate(t)
 	behavioralIssues := security.DetectSuspiciousBehavior([]*x509.Certificate{suspiciousCert}, "https://example.com")
-	
+
 	if len(behavioralIssues) == 0 {
 		t.Error("Expected behavioral issues for suspicious certificate")
 	} else {
@@ -509,25 +509,25 @@ func TestEnhancedSecurityValidation(t *testing.T) {
 			t.Logf("    - %s", issue)
 		}
 	}
-	
+
 	// Test 3: Multiple CA bundle sources (integration test)
 	t.Log("Testing multiple CA bundle sources...")
-	
+
 	mozillaCAs, bundleInfo, err := bundle.DownloadAndValidate()
 	if err != nil {
 		t.Skipf("Skipping CA bundle test: %v", err)
 	}
-	
+
 	t.Logf("✓ CA bundle validation successful: %s", bundleInfo)
 	if len(mozillaCAs.Subjects()) < 100 {
 		t.Errorf("Expected at least 100 CA certificates, got %d", len(mozillaCAs.Subjects()))
 	}
-	
+
 	// Test 4: Enhanced security validation integration
 	t.Log("Testing enhanced security validation integration...")
-	
+
 	result := security.PerformEnhancedValidation([]*x509.Certificate{suspiciousCert}, mozillaCAs, "https://suspicious-site.com")
-	
+
 	if len(result.SuspiciousBehaviors) == 0 {
 		t.Error("Expected suspicious behaviors to be detected")
 	} else {
@@ -545,15 +545,15 @@ func createRecentCertificateWithoutCT(t *testing.T) *x509.Certificate {
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(12345),
 		Subject: pkix.Name{
-			Organization:  []string{"Test Corp"},
-			Country:       []string{"US"},
-			CommonName:    "test-no-ct.example.com",
+			Organization: []string{"Test Corp"},
+			Country:      []string{"US"},
+			CommonName:   "test-no-ct.example.com",
 		},
-		NotBefore:    time.Now().Add(-1 * time.Hour), // Recent issuance
-		NotAfter:     time.Now().Add(90 * 24 * time.Hour),
-		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:     []string{"test-no-ct.example.com"},
+		NotBefore:   time.Now().Add(-1 * time.Hour), // Recent issuance
+		NotAfter:    time.Now().Add(90 * 24 * time.Hour),
+		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:    []string{"test-no-ct.example.com"},
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
@@ -579,15 +579,15 @@ func createSuspiciousCertificate(t *testing.T) *x509.Certificate {
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1), // Suspicious serial number
 		Subject: pkix.Name{
-			Organization:  []string{"Test Demo Corp"}, // Suspicious terms
-			Country:       []string{"US"},
-			CommonName:    "suspicious-test.example.com",
+			Organization: []string{"Test Demo Corp"}, // Suspicious terms
+			Country:      []string{"US"},
+			CommonName:   "suspicious-test.example.com",
 		},
-		NotBefore:       time.Now().Add(-1 * time.Hour), // Recent issuance
-		NotAfter:        time.Now().Add(1 * time.Hour),  // Very short validity
-		KeyUsage:        x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:        []string{"suspicious-test.example.com"},
+		NotBefore:          time.Now().Add(-1 * time.Hour), // Recent issuance
+		NotAfter:           time.Now().Add(1 * time.Hour),  // Very short validity
+		KeyUsage:           x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:        []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:           []string{"suspicious-test.example.com"},
 		SignatureAlgorithm: x509.SHA1WithRSA, // Weak signature algorithm
 	}
 
@@ -621,18 +621,18 @@ func TestIntegration(t *testing.T) {
 	// This is now an integration test that would test the built binary
 	// Since command line flags are in the cmd package, we test the packages directly
 	t.Log("Integration test - testing package functionality")
-	
+
 	// Test that all packages work together
 	mozillaCAs, _, err := bundle.DownloadAndValidate()
 	if err != nil {
 		t.Skipf("Skipping integration test: %v", err)
 	}
-	
+
 	certs, err := network.GetCertificateChain("https://www.google.com")
 	if err != nil {
 		t.Skipf("Skipping integration test: %v", err)
 	}
-	
+
 	result := security.PerformEnhancedValidation(certs, mozillaCAs, "https://www.google.com")
 	t.Logf("Integration test completed - found %d suspicious behaviors", len(result.SuspiciousBehaviors))
 }
