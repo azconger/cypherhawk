@@ -1,0 +1,229 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Linux builds
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          # macOS builds
+          - goos: darwin
+            goarch: amd64
+            suffix: macos-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: macos-arm64
+          # Windows builds
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64.exe
+          - goos: windows
+            goarch: arm64
+            suffix: windows-arm64.exe
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+        check-latest: true
+
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Run tests
+      run: go test -v ./...
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: 0
+      run: |
+        # Build with optimizations and version info
+        go build \
+          -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.version }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          -o dpi-hawk-${{ matrix.suffix }} \
+          ./cmd/dpi-hawk
+
+    - name: Create checksum
+      run: |
+        if [[ "${{ matrix.goos }}" == "windows" ]]; then
+          sha256sum dpi-hawk-${{ matrix.suffix }} > dpi-hawk-${{ matrix.suffix }}.sha256
+        else
+          sha256sum dpi-hawk-${{ matrix.suffix }} > dpi-hawk-${{ matrix.suffix }}.sha256
+        fi
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: dpi-hawk-${{ matrix.suffix }}
+        path: |
+          dpi-hawk-${{ matrix.suffix }}
+          dpi-hawk-${{ matrix.suffix }}.sha256
+
+  create-release:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Create release notes
+      run: |
+        cat > release_notes.md << 'EOF'
+        # DPI Hawk ${{ steps.get_version.outputs.version }}
+
+        ## What's New
+        - Cross-platform builds for Linux, macOS, and Windows
+        - Support for both AMD64 and ARM64 architectures
+        - Advanced security validation with Certificate Transparency checking
+        - Comprehensive behavioral analysis for DPI/MitM detection
+        - Multi-source CA bundle validation
+
+        ## Download Instructions
+
+        ### Quick Install (macOS/Linux)
+        ```bash
+        # Download and install (replace with your OS/arch)
+        curl -L -o dpi-hawk https://github.com/kaakaww/dpi-hawk/releases/download/${{ steps.get_version.outputs.version }}/dpi-hawk-linux-amd64
+        chmod +x dpi-hawk
+        ./dpi-hawk --help
+        ```
+
+        ### Windows
+        Download `dpi-hawk-windows-amd64.exe` and run from Command Prompt or PowerShell.
+
+        ## Usage Examples
+        ```bash
+        # Test default endpoints (corporate environment)
+        ./dpi-hawk --verbose
+
+        # Test specific URL
+        ./dpi-hawk -url https://example.com --verbose
+
+        # Save certificates to file
+        ./dpi-hawk -o corporate-cas.pem
+        ```
+
+        ## Verification
+        All binaries include SHA256 checksums. Verify downloads:
+        ```bash
+        sha256sum -c dpi-hawk-linux-amd64.sha256
+        ```
+
+        ## Platform Support
+        - ✅ Linux (AMD64, ARM64)
+        - ✅ macOS (Intel, Apple Silicon)
+        - ✅ Windows (AMD64, ARM64)
+
+        ## Java Integration
+        ```bash
+        # Use with StackHawk
+        hawk scan --ca-bundle dpi-hawk-certs.pem
+
+        # Use with Java applications
+        java -Djavax.net.ssl.trustStoreType=PEM -Djavax.net.ssl.trustStore=dpi-hawk-certs.pem MyApp
+        ```
+        EOF
+
+    - name: Prepare release assets
+      run: |
+        mkdir -p release_assets
+        # Move all artifacts to release_assets directory
+        find . -name "dpi-hawk-*" -type f | while read file; do
+          if [[ -f "$file" ]]; then
+            cp "$file" release_assets/
+          fi
+        done
+        
+        # List what we're releasing
+        echo "Release assets:"
+        ls -la release_assets/
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        name: DPI Hawk ${{ steps.get_version.outputs.version }}
+        body_path: release_notes.md
+        files: release_assets/*
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-binaries:
+    needs: build-and-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            binary: dpi-hawk-linux-amd64
+          - os: macos-latest
+            binary: dpi-hawk-macos-arm64
+          - os: windows-latest
+            binary: dpi-hawk-windows-amd64.exe
+
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: ${{ matrix.binary }}
+
+    - name: Test binary (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        chmod +x ${{ matrix.binary }}
+        ./${{ matrix.binary }} --help
+        echo "✅ Binary works on ${{ runner.os }}"
+
+    - name: Test binary (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        .\${{ matrix.binary }} --help
+        echo "✅ Binary works on Windows"
