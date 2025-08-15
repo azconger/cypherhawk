@@ -152,7 +152,7 @@ jobs:
       if: matrix.native && runner.os != 'Windows'
       run: |
         chmod +x cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }}
-./cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }} --help
+        ./cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }} --help
         ./cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }} --version
         echo "✅ Binary executes successfully on ${{ runner.os }}"
 
