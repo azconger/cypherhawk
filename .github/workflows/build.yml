@@ -52,32 +52,16 @@ jobs:
 
     - name: Check go mod tidy
       run: |
-        echo "=== Before go mod tidy ==="
-        git status --porcelain
-        ls -la go.*
-        
         go mod tidy
-        
-        echo "=== After go mod tidy ==="
-        git status --porcelain
-        ls -la go.* || echo "No go.* files found"
-        
-        CHANGES=$(git status --porcelain)
+        # Check for changes to tracked files only (ignore coverage.out and other untracked files)
+        CHANGES=$(git diff --name-only)
         if [ -n "$CHANGES" ]; then
-          echo "=== Changes detected ==="
+          echo "go mod tidy made changes to tracked files:"
           echo "$CHANGES"
-          git diff --name-only
           git diff
-          
-          # Allow go.sum to be removed if it was empty (no dependencies)
-          if echo "$CHANGES" | grep -q "D  go.sum" && [ ! -f go.sum ]; then
-            echo "Empty go.sum was removed (no dependencies) - this is OK"
-          else
-            echo "go.mod or go.sum has unexpected changes"
-            exit 1
-          fi
+          exit 1
         else
-          echo "No changes detected - go mod tidy is clean"
+          echo "go mod tidy is clean - no changes to tracked files"
         fi
 
   build-matrix:
