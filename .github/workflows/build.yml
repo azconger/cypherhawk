@@ -52,13 +52,23 @@ jobs:
 
     - name: Check go mod tidy
       run: |
+        echo "=== Before go mod tidy ==="
+        git status --porcelain
+        ls -la go.*
+        
         go mod tidy
-        # For projects with no dependencies, go mod tidy may remove empty go.sum
-        # Only fail if go.mod changed or go.sum has actual content changes
+        
+        echo "=== After go mod tidy ==="
+        git status --porcelain
+        ls -la go.* || echo "No go.* files found"
+        
         CHANGES=$(git status --porcelain)
         if [ -n "$CHANGES" ]; then
-          echo "go mod tidy made changes:"
+          echo "=== Changes detected ==="
+          echo "$CHANGES"
+          git diff --name-only
           git diff
+          
           # Allow go.sum to be removed if it was empty (no dependencies)
           if echo "$CHANGES" | grep -q "D  go.sum" && [ ! -f go.sum ]; then
             echo "Empty go.sum was removed (no dependencies) - this is OK"
@@ -66,6 +76,8 @@ jobs:
             echo "go.mod or go.sum has unexpected changes"
             exit 1
           fi
+        else
+          echo "No changes detected - go mod tidy is clean"
         fi
 
   build-matrix:
