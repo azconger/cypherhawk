@@ -16,11 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kaakaww/dpi-hawk/internal/analysis"
-	"github.com/kaakaww/dpi-hawk/internal/bundle"
-	"github.com/kaakaww/dpi-hawk/internal/network"
-	"github.com/kaakaww/dpi-hawk/internal/output"
-	"github.com/kaakaww/dpi-hawk/internal/security"
+	"github.com/kaakaww/cypherhawk/internal/analysis"
+	"github.com/kaakaww/cypherhawk/internal/bundle"
+	"github.com/kaakaww/cypherhawk/internal/network"
+	"github.com/kaakaww/cypherhawk/internal/output"
+	"github.com/kaakaww/cypherhawk/internal/security"
 )
 
 // TestMozillaCATrustedCertificate tests that a certificate signed by a Mozilla CA is trusted

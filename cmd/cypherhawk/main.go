@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kaakaww/dpi-hawk/internal/bundle"
-	"github.com/kaakaww/dpi-hawk/internal/network"
-	"github.com/kaakaww/dpi-hawk/internal/output"
-	"github.com/kaakaww/dpi-hawk/internal/security"
+	"github.com/kaakaww/cypherhawk/internal/bundle"
+	"github.com/kaakaww/cypherhawk/internal/network"
+	"github.com/kaakaww/cypherhawk/internal/output"
+	"github.com/kaakaww/cypherhawk/internal/security"
 )
 
 // Build-time variables (set via -ldflags)
@@ -37,12 +37,12 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("DPI Hawk %s (built %s)\n", version, buildTime)
+		fmt.Printf("CypherHawk %s (built %s)\n", version, buildTime)
 		return
 	}
 
 	if *verbose {
-		fmt.Fprintf(os.Stderr, "DPI Hawk %s - Detecting corporate DPI/MitM proxies...\n", version)
+		fmt.Fprintf(os.Stderr, "CypherHawk %s - Detecting corporate DPI/MitM proxies...\n", version)
 	}
 
 	// Step 1: Download and cross-validate Mozilla CA bundles

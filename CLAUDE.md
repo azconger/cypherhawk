@@ -1,4 +1,4 @@
-# DPI Hawk - Claude Code Context
+# CypherHawk - Claude Code Context
 
 ## Project Overview
 
@@ -17,13 +17,13 @@ Built by StackHawk but designed for the broader Java ecosystem including Maven, 
 
 ```bash
 # Development (standard Go project structure)
-go run ./cmd/dpi-hawk              # Run the tool with default settings
-go run ./cmd/dpi-hawk -url https://example.com  # Run with custom target URL
-go run ./cmd/dpi-hawk -o certs.pem # Save certificates to file
+go run ./cmd/cypherhawk              # Run the tool with default settings
+go run ./cmd/cypherhawk -url https://example.com  # Run with custom target URL
+go run ./cmd/cypherhawk -o certs.pem # Save certificates to file
 go test -v ./...               # Run comprehensive tests with mock DPI simulation
 
 # Build
-go build -o dpi-hawk ./cmd/dpi-hawk  # Build single binary
+go build -o cypherhawk ./cmd/cypherhawk  # Build single binary
 
 # Cross-platform builds (advanced)
 make build-all      # Build for all platforms (if Makefile exists)
@@ -62,9 +62,9 @@ make clean          # Clean build artifacts
 ## Project Structure
 
 ```
-dpi-hawk/
+cypherhawk/
 ├── cmd/
-│   └── dpi-hawk/           # Main application entry point
+│   └── cypherhawk/         # Main application entry point
 │       └── main.go         # CLI interface (~125 lines)
 ├── internal/               # Internal packages (not importable by other projects)
 │   ├── bundle/            # CA bundle management (~118 lines)
@@ -78,7 +78,7 @@ dpi-hawk/
 │   └── output/            # Output generation (~41 lines)
 │       └── output.go      # PEM formatting and deduplication
 ├── main_test.go           # Comprehensive security validation tests (~640 lines)
-├── go.mod                 # Go module definition (github.com/kaakaww/dpi-hawk)
+├── go.mod                 # Go module definition (github.com/kaakaww/cypherhawk)
 ├── go.sum                 # Go module checksums
 ├── CLAUDE.md              # Context file for Claude Code
 ├── README.md              # User documentation and usage examples
@@ -89,7 +89,7 @@ dpi-hawk/
 
 | File/Package | Purpose |
 |--------------|---------|
-| `cmd/dpi-hawk/main.go` | Main CLI application entry point - handles command-line interface, orchestrates other packages |
+| `cmd/cypherhawk/main.go` | Main CLI application entry point - handles command-line interface, orchestrates other packages |
 | `internal/bundle/` | CA bundle management - downloads Mozilla CA bundles from multiple sources with cross-validation |
 | `internal/analysis/` | Certificate chain analysis - browser-like validation, DPI detection, trust verification |
 | `internal/security/` | Advanced security features - Certificate Transparency validation, behavioral analysis, CA impersonation detection |
@@ -149,18 +149,18 @@ The tool tests against four key endpoints that represent common corporate networ
 
 ```bash
 # Basic usage
-dpi-hawk                          # Test default 4 endpoints (Google, StackHawk auth/API, AWS S3)
-dpi-hawk -url https://example.com # Test specific target URL
-dpi-hawk -o certs.pem            # Save certificates to file
-dpi-hawk -o -                    # Output certificates to stdout
-dpi-hawk --verbose               # Enable detailed security analysis output
+cypherhawk                          # Test default 4 endpoints (Google, StackHawk auth/API, AWS S3)
+cypherhawk -url https://example.com # Test specific target URL
+cypherhawk -o certs.pem            # Save certificates to file
+cypherhawk -o -                    # Output certificates to stdout
+cypherhawk --verbose               # Enable detailed security analysis output
 
 # Future enhanced modes (Phase 4+)
-dpi-hawk --mode paranoid         # Alert on ANY unknown certificates (untrusted networks)
-dpi-hawk --mode compliance --baseline certs.json  # Compare against approved baseline
-dpi-hawk --mode monitor --interval 60s --webhook https://...  # Continuous monitoring
-dpi-hawk --geoip-check          # Include geographic risk assessment
-dpi-hawk --output-format json   # Machine-readable output
+cypherhawk --mode paranoid         # Alert on ANY unknown certificates (untrusted networks)
+cypherhawk --mode compliance --baseline certs.json  # Compare against approved baseline
+cypherhawk --mode monitor --interval 60s --webhook https://...  # Continuous monitoring
+cypherhawk --geoip-check          # Include geographic risk assessment
+cypherhawk --output-format json   # Machine-readable output
 ```
 
 **Verbose Mode Security Output:**
@@ -288,36 +288,36 @@ The generated PEM file works with various Java tools:
 
 **StackHawk:**
 ```bash
-hawk scan --ca-bundle dpi-hawk-certs.pem
+hawk scan --ca-bundle cypherhawk-certs.pem
 ```
 
 **Java applications (PEM format - Java 9+):**
 ```bash
-java -Djavax.net.ssl.trustStoreType=PEM -Djavax.net.ssl.trustStore=dpi-hawk-certs.pem MyApp
+java -Djavax.net.ssl.trustStoreType=PEM -Djavax.net.ssl.trustStore=cypherhawk-certs.pem MyApp
 ```
 
 **Java applications (JKS format - all Java versions):**
 ```bash
 # Convert PEM to JKS format
-keytool -importcert -noprompt -file dpi-hawk-certs.pem -keystore dpi-hawk.jks -storepass changeit -alias dpi-ca
+keytool -importcert -noprompt -file cypherhawk-certs.pem -keystore cypherhawk.jks -storepass changeit -alias cypher-ca
 
 # Use JKS with Java application
-java -Djavax.net.ssl.trustStore=dpi-hawk.jks -Djavax.net.ssl.trustStorePassword=changeit MyApp
+java -Djavax.net.ssl.trustStore=cypherhawk.jks -Djavax.net.ssl.trustStorePassword=changeit MyApp
 ```
 
 **Maven (PEM format):**
 ```bash
-mvn -Djavax.net.ssl.trustStoreType=PEM -Djavax.net.ssl.trustStore=dpi-hawk-certs.pem clean install
+mvn -Djavax.net.ssl.trustStoreType=PEM -Djavax.net.ssl.trustStore=cypherhawk-certs.pem clean install
 ```
 
 **Maven (JKS format):**
 ```bash
-mvn -Djavax.net.ssl.trustStore=dpi-hawk.jks -Djavax.net.ssl.trustStorePassword=changeit clean install
+mvn -Djavax.net.ssl.trustStore=cypherhawk.jks -Djavax.net.ssl.trustStorePassword=changeit clean install
 ```
 
 **Gradle:**
 ```bash
-./gradlew build -Djavax.net.ssl.trustStoreType=PEM -Djavax.net.ssl.trustStore=dpi-hawk-certs.pem
+./gradlew build -Djavax.net.ssl.trustStoreType=PEM -Djavax.net.ssl.trustStore=cypherhawk-certs.pem
 ```
 
 ## Security Considerations

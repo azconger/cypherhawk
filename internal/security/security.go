@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaakaww/dpi-hawk/internal/analysis"
+	"github.com/kaakaww/cypherhawk/internal/analysis"
 )
 
 // ValidateCertificateTransparency checks if certificates have proper CT (Certificate Transparency) evidence

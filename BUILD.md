@@ -1,6 +1,6 @@
-# DPI Hawk - Build and Release Guide
+# CypherHawk - Build and Release Guide
 
-This document describes how to build, test, and release DPI Hawk across multiple platforms.
+This document describes how to build, test, and release CypherHawk across multiple platforms.
 
 ## Quick Start
 
@@ -12,13 +12,13 @@ This document describes how to build, test, and release DPI Hawk across multiple
 ### Development Build
 ```bash
 # Clone and build
-git clone https://github.com/kaakaww/dpi-hawk.git
-cd dpi-hawk
+git clone https://github.com/kaakaww/cypherhawk.git
+cd cypherhawk
 make build
 
 # Test it works
-./dpi-hawk --version
-./dpi-hawk --help
+./cypherhawk --version
+./cypherhawk --help
 ```
 
 ## Build System
@@ -98,9 +98,9 @@ This script will:
    ```
 
 3. **Upload to GitHub:**
-   - Go to [Releases](https://github.com/kaakaww/dpi-hawk/releases)
+   - Go to [Releases](https://github.com/kaakaww/cypherhawk/releases)
    - Click "Create a new release"
-   - Upload all `dpi-hawk-*` binaries and `.sha256` files
+   - Upload all `cypherhawk-*` binaries and `.sha256` files
 
 ## Distribution
 
@@ -109,31 +109,31 @@ This script will:
 **Linux/macOS:**
 ```bash
 # Download and install
-curl -L -o dpi-hawk https://github.com/kaakaww/dpi-hawk/releases/latest/download/dpi-hawk-linux-amd64
-chmod +x dpi-hawk
-./dpi-hawk --help
+curl -L -o cypherhawk https://github.com/kaakaww/cypherhawk/releases/latest/download/cypherhawk-linux-amd64
+chmod +x cypherhawk
+./cypherhawk --help
 ```
 
 **Windows:**
 ```powershell
-# Download dpi-hawk-windows-amd64.exe from releases
+# Download cypherhawk-windows-amd64.exe from releases
 # Run from Command Prompt or PowerShell
-.\dpi-hawk-windows-amd64.exe --help
+.\cypherhawk-windows-amd64.exe --help
 ```
 
 **Go developers:**
 ```bash
-go install github.com/kaakaww/dpi-hawk/cmd/dpi-hawk@latest
+go install github.com/kaakaww/cypherhawk/cmd/cypherhawk@latest
 ```
 
 ### Verification
 ```bash
 # Verify checksum
-sha256sum -c dpi-hawk-linux-amd64.sha256
+sha256sum -c cypherhawk-linux-amd64.sha256
 
 # Test functionality
-./dpi-hawk --version
-./dpi-hawk --verbose -url https://www.google.com
+./cypherhawk --version
+./cypherhawk --verbose -url https://www.google.com
 ```
 
 ## CI/CD Workflows
@@ -210,7 +210,7 @@ make build-all
 All releases include SHA256 checksums:
 ```bash
 # Verify download integrity
-sha256sum -c dpi-hawk-linux-amd64.sha256
+sha256sum -c cypherhawk-linux-amd64.sha256
 ```
 
 ### Reproducible Builds

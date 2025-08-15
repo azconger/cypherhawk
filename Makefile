@@ -1,8 +1,8 @@
-# DPI Hawk - Cross-platform build automation
+# CypherHawk - Cross-platform build automation
 .PHONY: build build-all clean test help install dev
 
 # Build variables
-BINARY_NAME := dpi-hawk
+BINARY_NAME := cypherhawk
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -ldflags="-s -w -X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME)"
@@ -15,12 +15,12 @@ all: build
 
 # Development build (current platform)
 build:
-	@echo "Building DPI Hawk $(VERSION) for $(shell go env GOOS)/$(shell go env GOARCH)..."
-	$(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/dpi-hawk
+	@echo "Building CypherHawk $(VERSION) for $(shell go env GOOS)/$(shell go env GOARCH)..."
+	$(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/cypherhawk
 
 # Development with verbose output
 dev: build
-	@echo "Running DPI Hawk in development mode..."
+	@echo "Running CypherHawk in development mode..."
 	./$(BINARY_NAME) --version
 	./$(BINARY_NAME) --help
 
@@ -39,30 +39,30 @@ clean:
 
 # Install locally (for developers)
 install:
-	@echo "Installing DPI Hawk..."
-	$(GOFLAGS) go install $(LDFLAGS) ./cmd/dpi-hawk
+	@echo "Installing CypherHawk..."
+	$(GOFLAGS) go install $(LDFLAGS) ./cmd/cypherhawk
 
 # Cross-platform builds
 build-all: clean
-	@echo "Building DPI Hawk $(VERSION) for all platforms..."
+	@echo "Building CypherHawk $(VERSION) for all platforms..."
 	
 	# Linux builds
 	@echo "Building for Linux AMD64..."
-	GOOS=linux GOARCH=amd64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-linux-amd64 ./cmd/dpi-hawk
+	GOOS=linux GOARCH=amd64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-linux-amd64 ./cmd/cypherhawk
 	@echo "Building for Linux ARM64..."
-	GOOS=linux GOARCH=arm64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-linux-arm64 ./cmd/dpi-hawk
+	GOOS=linux GOARCH=arm64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-linux-arm64 ./cmd/cypherhawk
 	
 	# macOS builds
 	@echo "Building for macOS AMD64..."
-	GOOS=darwin GOARCH=amd64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-macos-amd64 ./cmd/dpi-hawk
+	GOOS=darwin GOARCH=amd64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-macos-amd64 ./cmd/cypherhawk
 	@echo "Building for macOS ARM64 (Apple Silicon)..."
-	GOOS=darwin GOARCH=arm64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-macos-arm64 ./cmd/dpi-hawk
+	GOOS=darwin GOARCH=arm64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-macos-arm64 ./cmd/cypherhawk
 	
 	# Windows builds
 	@echo "Building for Windows AMD64..."
-	GOOS=windows GOARCH=amd64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-windows-amd64.exe ./cmd/dpi-hawk
+	GOOS=windows GOARCH=amd64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-windows-amd64.exe ./cmd/cypherhawk
 	@echo "Building for Windows ARM64..."
-	GOOS=windows GOARCH=arm64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-windows-arm64.exe ./cmd/dpi-hawk
+	GOOS=windows GOARCH=arm64 $(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME)-windows-arm64.exe ./cmd/cypherhawk
 	
 	@echo ""
 	@echo "✅ Cross-platform builds completed:"
@@ -119,7 +119,7 @@ run-url: build
 
 # Show help
 help:
-	@echo "DPI Hawk Build System"
+	@echo "CypherHawk Build System"
 	@echo ""
 	@echo "Usage:"
 	@echo "  make build       Build for current platform"

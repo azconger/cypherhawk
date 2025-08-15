@@ -73,24 +73,24 @@ jobs:
         # Build with optimizations and version info
         go build \
           -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.version }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-          -o dpi-hawk-${{ matrix.suffix }} \
-          ./cmd/dpi-hawk
+          -o cypherhawk-${{ matrix.suffix }} \
+          ./cmd/cypherhawk
 
     - name: Create checksum
       run: |
         if [[ "${{ matrix.goos }}" == "windows" ]]; then
-          sha256sum dpi-hawk-${{ matrix.suffix }} > dpi-hawk-${{ matrix.suffix }}.sha256
+          sha256sum cypherhawk-${{ matrix.suffix }} > cypherhawk-${{ matrix.suffix }}.sha256
         else
-          sha256sum dpi-hawk-${{ matrix.suffix }} > dpi-hawk-${{ matrix.suffix }}.sha256
+          sha256sum cypherhawk-${{ matrix.suffix }} > cypherhawk-${{ matrix.suffix }}.sha256
         fi
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: dpi-hawk-${{ matrix.suffix }}
+        name: cypherhawk-${{ matrix.suffix }}
         path: |
-          dpi-hawk-${{ matrix.suffix }}
-          dpi-hawk-${{ matrix.suffix }}.sha256
+          cypherhawk-${{ matrix.suffix }}
+          cypherhawk-${{ matrix.suffix }}.sha256
 
   create-release:
     needs: build-and-release
@@ -114,7 +114,7 @@ jobs:
     - name: Create release notes
       run: |
         cat > release_notes.md << 'EOF'
-        # DPI Hawk ${{ steps.get_version.outputs.version }}
+        # CypherHawk ${{ steps.get_version.outputs.version }}
 
         ## What's New
         - Cross-platform builds for Linux, macOS, and Windows
@@ -128,30 +128,30 @@ jobs:
         ### Quick Install (macOS/Linux)
         ```bash
         # Download and install (replace with your OS/arch)
-        curl -L -o dpi-hawk https://github.com/kaakaww/dpi-hawk/releases/download/${{ steps.get_version.outputs.version }}/dpi-hawk-linux-amd64
-        chmod +x dpi-hawk
-        ./dpi-hawk --help
+        curl -L -o cypherhawk https://github.com/kaakaww/cypherhawk/releases/download/${{ steps.get_version.outputs.version }}/cypherhawk-linux-amd64
+        chmod +x cypherhawk
+        ./cypherhawk --help
         ```
 
         ### Windows
-        Download `dpi-hawk-windows-amd64.exe` and run from Command Prompt or PowerShell.
+        Download `cypherhawk-windows-amd64.exe` and run from Command Prompt or PowerShell.
 
         ## Usage Examples
         ```bash
         # Test default endpoints (corporate environment)
-        ./dpi-hawk --verbose
+        ./cypherhawk --verbose
 
         # Test specific URL
-        ./dpi-hawk -url https://example.com --verbose
+        ./cypherhawk -url https://example.com --verbose
 
         # Save certificates to file
-        ./dpi-hawk -o corporate-cas.pem
+        ./cypherhawk -o corporate-cas.pem
         ```
 
         ## Verification
         All binaries include SHA256 checksums. Verify downloads:
         ```bash
-        sha256sum -c dpi-hawk-linux-amd64.sha256
+        sha256sum -c cypherhawk-linux-amd64.sha256
         ```
 
         ## Platform Support
@@ -162,10 +162,10 @@ jobs:
         ## Java Integration
         ```bash
         # Use with StackHawk
-        hawk scan --ca-bundle dpi-hawk-certs.pem
+        hawk scan --ca-bundle cypherhawk-certs.pem
 
         # Use with Java applications
-        java -Djavax.net.ssl.trustStoreType=PEM -Djavax.net.ssl.trustStore=dpi-hawk-certs.pem MyApp
+        java -Djavax.net.ssl.trustStoreType=PEM -Djavax.net.ssl.trustStore=cypherhawk-certs.pem MyApp
         ```
         EOF
 
@@ -173,7 +173,7 @@ jobs:
       run: |
         mkdir -p release_assets
         # Move all artifacts to release_assets directory
-        find . -name "dpi-hawk-*" -type f | while read file; do
+        find . -name "cypherhawk-*" -type f | while read file; do
           if [[ -f "$file" ]]; then
             cp "$file" release_assets/
           fi
@@ -187,7 +187,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.get_version.outputs.version }}
-        name: DPI Hawk ${{ steps.get_version.outputs.version }}
+        name: CypherHawk ${{ steps.get_version.outputs.version }}
         body_path: release_notes.md
         files: release_assets/*
         draft: false
@@ -203,11 +203,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            binary: dpi-hawk-linux-amd64
+            binary: cypherhawk-linux-amd64
           - os: macos-latest
-            binary: dpi-hawk-macos-arm64
+            binary: cypherhawk-macos-arm64
           - os: windows-latest
-            binary: dpi-hawk-windows-amd64.exe
+            binary: cypherhawk-windows-amd64.exe
 
     steps:
     - name: Download artifact

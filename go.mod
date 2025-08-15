@@ -1,3 +1,3 @@
-module github.com/kaakaww/dpi-hawk
+module github.com/kaakaww/cypherhawk
 
 go 1.23
