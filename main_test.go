@@ -161,8 +161,8 @@ func TestPEMOutput(t *testing.T) {
 	if !strings.Contains(pemOutput, "END CERTIFICATE") {
 		t.Error("PEM output missing END CERTIFICATE marker")
 	}
-	if !strings.Contains(pemOutput, "DPI Hawk") {
-		t.Error("PEM output missing DPI Hawk header")
+	if !strings.Contains(pemOutput, "CypherHawk") {
+		t.Error("PEM output missing CypherHawk header")
 	}
 	if !strings.Contains(pemOutput, mockCA.Subject.CommonName) {
 		t.Error("PEM output missing certificate subject")
@@ -611,7 +611,7 @@ func TestIntegration(t *testing.T) {
 	}
 
 	// Create temporary output file
-	tmpFile, err := os.CreateTemp("", "dpi-hawk-test-*.pem")
+	tmpFile, err := os.CreateTemp("", "cypherhawk-test-*.pem")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}

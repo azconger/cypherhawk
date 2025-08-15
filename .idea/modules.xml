@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/dpi-hawk.iml" filepath="$PROJECT_DIR$/.idea/dpi-hawk.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/cypherhawk.iml" filepath="$PROJECT_DIR$/.idea/cypherhawk.iml" />
     </modules>
   </component>
 </project>

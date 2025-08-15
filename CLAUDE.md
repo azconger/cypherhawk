@@ -33,8 +33,8 @@ make clean          # Clean build artifacts
 
 ## Development Workflow
 
-1. Use `go run ./cmd/dpi-hawk -url <target>` for testing during development
-2. Use `go build -o dpi-hawk ./cmd/dpi-hawk` to create local binary for testing
+1. Use `go run ./cmd/cypherhawk -url <target>` for testing during development
+2. Use `go build -o cypherhawk ./cmd/cypherhawk` to create local binary for testing
 3. Use `go test -v ./...` to run comprehensive functional tests with simulated DPI environments
 4. Use `make build-all` for cross-platform binaries when preparing releases (if Makefile exists)
 5. Test against various corporate environments when possible

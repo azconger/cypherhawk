@@ -21,7 +21,7 @@ func ContainsCertificate(certs []*x509.Certificate, target *x509.Certificate) bo
 func GeneratePEM(certs []*x509.Certificate) string {
 	var output strings.Builder
 
-	output.WriteString("# DPI Hawk - Detected unknown CA certificates\n")
+	output.WriteString("# CypherHawk - Detected unknown CA certificates\n")
 	output.WriteString("# These certificates were found in TLS connections but are not in Mozilla's trusted CA bundle\n")
 	output.WriteString("# This indicates potential corporate DPI/MitM proxy infrastructure\n\n")
 

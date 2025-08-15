@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# DPI Hawk Release Script
+# CypherHawk Release Script
 # Creates a new release with proper versioning and cross-platform builds
 
 set -e
@@ -45,7 +45,7 @@ if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
     exit 1
 fi
 
-log_info "Creating release $VERSION for DPI Hawk"
+log_info "Creating release $VERSION for CypherHawk"
 
 # Check if we're on a clean git state
 if [[ -n $(git status --porcelain) ]]; then
@@ -90,7 +90,7 @@ log_success "Checksums created"
 
 # Show what we built
 log_info "Built binaries:"
-ls -la dpi-hawk-*
+ls -la cypherhawk-*
 
 # Verify binaries
 log_info "Verifying binaries..."
@@ -123,8 +123,8 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     
     echo
     log_success "Release $VERSION initiated!"
-    log_info "Check GitHub Actions: https://github.com/kaakaww/dpi-hawk/actions"
-    log_info "Release will be available at: https://github.com/kaakaww/dpi-hawk/releases/tag/$VERSION"
+    log_info "Check GitHub Actions: https://github.com/kaakaww/cypherhawk/actions"
+    log_info "Release will be available at: https://github.com/kaakaww/cypherhawk/releases/tag/$VERSION"
 else
     log_info "Release cancelled. Tag created locally but not pushed."
     log_info "To clean up: git tag -d $VERSION"
