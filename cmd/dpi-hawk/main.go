@@ -1,0 +1,143 @@
+package main
+
+import (
+	"crypto/x509"
+	"flag"
+	"fmt"
+	"os"
+
+	"github.com/kaakaww/dpi-hawk/internal/bundle"
+	"github.com/kaakaww/dpi-hawk/internal/network"
+	"github.com/kaakaww/dpi-hawk/internal/output"
+	"github.com/kaakaww/dpi-hawk/internal/security"
+)
+
+// Build-time variables (set via -ldflags)
+var (
+	version   = "dev"
+	buildTime = "unknown"
+)
+
+var (
+	outputFile  = flag.String("o", "", "Output file for CA certificates (use '-' for stdout)")
+	targetURL   = flag.String("url", "", "Custom target URL to test (overrides default endpoints)")
+	verbose     = flag.Bool("verbose", false, "Enable verbose output")
+	showVersion = flag.Bool("version", false, "Show version information")
+)
+
+// Default endpoints representing common corporate network requirements
+var defaultEndpoints = []string{
+	"https://www.google.com",
+	"https://auth.stackhawk.com",
+	"https://api.stackhawk.com",
+	"https://s3.us-west-2.amazonaws.com",
+}
+
+func main() {
+	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("DPI Hawk %s (built %s)\n", version, buildTime)
+		return
+	}
+
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "DPI Hawk %s - Detecting corporate DPI/MitM proxies...\n", version)
+	}
+
+	// Step 1: Download and cross-validate Mozilla CA bundles
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "Downloading and cross-validating CA bundles...\n")
+	}
+	mozillaCAs, bundleInfo, err := bundle.DownloadAndValidate()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error downloading CA bundles: %v\n", err)
+		os.Exit(2)
+	}
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "Loaded %d trusted CA certificates (%s)\n", len(mozillaCAs.Subjects()), bundleInfo)
+	}
+
+	// Step 2: Determine endpoints to test
+	endpoints := defaultEndpoints
+	if *targetURL != "" {
+		endpoints = []string{*targetURL}
+	}
+
+	// Step 3: Test endpoints and collect unknown certificates
+	var unknownCerts []*x509.Certificate
+	successCount := 0
+
+	for i, endpoint := range endpoints {
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "Testing endpoint %d/%d: %s\n", i+1, len(endpoints), endpoint)
+		}
+
+		certs, err := network.GetCertificateChain(endpoint)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to connect to %s: %v\n", endpoint, err)
+			continue
+		}
+
+		successCount++
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "Retrieved %d certificates from %s\n", len(certs), endpoint)
+		}
+
+		// Enhanced security validation with multiple techniques
+		securityIssues := security.PerformEnhancedValidation(certs, mozillaCAs, endpoint)
+
+		// Report security issues if verbose
+		if *verbose && len(securityIssues.SuspiciousBehaviors) > 0 {
+			fmt.Fprintf(os.Stderr, "Security analysis for %s:\n", endpoint)
+			for _, issue := range securityIssues.SuspiciousBehaviors {
+				fmt.Fprintf(os.Stderr, "  - %s\n", issue)
+			}
+		}
+
+		// Add untrusted CAs to results
+		for _, cert := range securityIssues.UntrustedCAs {
+			// Check if we already have this certificate (deduplication)
+			if !output.ContainsCertificate(unknownCerts, cert) {
+				unknownCerts = append(unknownCerts, cert)
+				if *verbose {
+					fmt.Fprintf(os.Stderr, "Found unknown CA: %s\n", cert.Subject.CommonName)
+				}
+			}
+		}
+	}
+
+	// Step 4: Report results
+	if successCount == 0 {
+		fmt.Fprintf(os.Stderr, "Error: Failed to connect to any endpoints\n")
+		os.Exit(2)
+	}
+
+	if len(unknownCerts) == 0 {
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "No unknown CA certificates detected - no DPI/MitM proxy found\n")
+		}
+		os.Exit(0)
+	}
+
+	// Step 5: Output unknown certificates in PEM format
+	pemOutput := output.GeneratePEM(unknownCerts)
+
+	if *outputFile == "" || *outputFile == "-" {
+		fmt.Print(pemOutput)
+	} else {
+		err := os.WriteFile(*outputFile, []byte(pemOutput), 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing to file %s: %v\n", *outputFile, err)
+			os.Exit(2)
+		}
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "Wrote %d unknown CA certificates to %s\n", len(unknownCerts), *outputFile)
+		}
+	}
+
+	// Exit with partial failure code if some endpoints failed
+	if successCount < len(endpoints) {
+		os.Exit(1)
+	}
+}
