@@ -154,6 +154,13 @@ dpi-hawk -url https://example.com # Test specific target URL
 dpi-hawk -o certs.pem            # Save certificates to file
 dpi-hawk -o -                    # Output certificates to stdout
 dpi-hawk --verbose               # Enable detailed security analysis output
+
+# Future enhanced modes (Phase 4+)
+dpi-hawk --mode paranoid         # Alert on ANY unknown certificates (untrusted networks)
+dpi-hawk --mode compliance --baseline certs.json  # Compare against approved baseline
+dpi-hawk --mode monitor --interval 60s --webhook https://...  # Continuous monitoring
+dpi-hawk --geoip-check          # Include geographic risk assessment
+dpi-hawk --output-format json   # Machine-readable output
 ```
 
 **Verbose Mode Security Output:**
@@ -163,6 +170,12 @@ When using `--verbose`, the tool provides detailed security analysis including:
 - Hostname validation results
 - CA impersonation detection alerts
 - Risk scoring when multiple suspicious indicators are detected
+
+**Future Enhanced Output (Phase 4+):**
+- Network context analysis (public WiFi risk assessment)
+- Geographic threat indicators (high-surveillance regions)
+- Baseline comparison results (deviation from approved certificates)
+- Real-time monitoring alerts and webhook notifications
 
 ### Key Functions (main.go)
 - **Mozilla CA download** - Downloads trusted CA bundle from curl.se/ca/cacert.pem
@@ -196,12 +209,48 @@ When using `--verbose`, the tool provides detailed security analysis including:
 5. ✅ **Enhanced certificate chain validation** - Browser-like verification with hostname validation
 6. ✅ **Risk scoring system** - Combine multiple suspicious indicators for high-confidence detection
 
-**Phase 4 - Future Enhancements:**
-1. **Embedded CA bundle backup** - Fallback for air-gapped environments
-2. **JSON output format** - Machine-readable output option
-3. **Configuration file support** - Custom endpoint lists and settings
-4. **Proxy support** - Corporate proxy configuration
-5. **Advanced CT log validation** - Direct querying of Certificate Transparency logs
+**Phase 4 - Enhanced Modes & Use Cases:**
+1. **Detection modes** - Multiple operating modes for different scenarios:
+   - `--mode corporate` (current behavior) - Extract corporate DPI certificates
+   - `--mode paranoid` - Alert on ANY unknown certificates (untrusted networks)
+   - `--mode compliance` - Compare against approved certificate baseline
+   - `--mode monitor` - Continuous monitoring with configurable intervals
+2. **Network context awareness** - Adapt behavior based on environment:
+   - GeoIP-based risk assessment for high-surveillance regions
+   - Network type detection (public WiFi, corporate, home)
+   - Known-malicious hotspot fingerprinting
+3. **Real-time monitoring** - Background operation capabilities:
+   - Daemon mode for continuous certificate monitoring
+   - System-wide HTTPS connection monitoring
+   - Webhook/API alerting for security teams
+
+**Phase 5 - Advanced Security Features:**
+1. **Threat intelligence integration** - Enhanced detection capabilities:
+   - Direct Certificate Transparency log queries for recent certificates
+   - Malicious CA database integration (known-compromised authorities)
+   - IoC feeds for known MITM infrastructure signatures
+2. **Behavioral analysis enhancements** - Pattern recognition:
+   - Cross-site certificate change correlation
+   - Geographic anomaly detection in certificate issuance
+   - Timing analysis for suspicious certificate patterns
+3. **Privacy & forensics** - Professional security features:
+   - Baseline certificate storage and comparison
+   - Forensic reporting for security investigations
+   - Risk scoring algorithms for MITM probability assessment
+
+**Phase 6 - Integration & Usability:**
+1. **Platform integrations** - Broader ecosystem support:
+   - Browser extension for real-time certificate warnings
+   - SIEM integration via REST APIs and webhooks
+   - CI/CD pipeline security validation
+2. **Output formats & reporting** - Enhanced data presentation:
+   - JSON/YAML output for programmatic consumption
+   - Executive summary reports for compliance teams
+   - Machine-readable threat indicators for automated processing
+3. **Configuration & deployment** - Enterprise-ready features:
+   - Configuration file support for custom endpoint lists
+   - Corporate proxy support with authentication
+   - Embedded CA bundle backup for air-gapped environments
 
 ## Common Enhancement Areas
 
@@ -216,10 +265,22 @@ When modifying this project, common tasks include:
 
 ## Target Audience
 
+### **Current Primary Users (Phase 1-3)**
 - **Java developers** dealing with corporate environments
 - **StackHawk users** evaluating the scanner in corporate environments
 - **DevOps/SRE teams** dealing with corporate security infrastructure
 - **Security teams** who need to configure certificate trust for Java applications
+
+### **Potential Expanded Users (Phase 4-6)**
+- **General users** on untrusted networks (coffee shops, airports, hotels, public WiFi)
+- **Privacy-conscious individuals** wanting to verify connection integrity
+- **Travelers** checking for network interception in foreign countries
+- **Security professionals & penetration testers** validating network security
+- **Security auditors** detecting unauthorized MITM devices on corporate networks
+- **Bug bounty hunters** looking for network-level vulnerabilities
+- **Compliance teams** in financial services, healthcare, and government
+- **Network administrators** monitoring for rogue proxies and unauthorized surveillance
+- **CI/CD security teams** ensuring build environments aren't compromised
 
 ## Integration Examples
 
