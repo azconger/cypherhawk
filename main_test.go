@@ -604,6 +604,550 @@ func createSuspiciousCertificate(t *testing.T) *x509.Certificate {
 	return cert
 }
 
+// TestRealisticDPIEnvironments tests multiple realistic DPI scenarios
+func TestRealisticDPIEnvironments(t *testing.T) {
+	t.Log("=== Testing Realistic Corporate DPI Environments ===")
+
+	scenarios := []struct {
+		name     string
+		vendor   string
+		org      string
+		cn       string
+		features DPIFeatures
+	}{
+		{
+			name:   "Palo Alto Networks",
+			vendor: "Palo Alto Networks",
+			org:    "Palo Alto Networks Inc.",
+			cn:     "Palo Alto Networks Enterprise Root CA",
+			features: DPIFeatures{
+				hasCustomOIDs:     true,
+				weakSignature:     false,
+				suspiciousSerial:  false,
+				recentIssuance:    true,
+				longValidity:      true,
+				corporateDomain:   "paloaltonetworks.com",
+				includesSCT:       false,
+			},
+		},
+		{
+			name:   "Zscaler",
+			vendor: "Zscaler",
+			org:    "Zscaler Inc.",
+			cn:     "Zscaler Root CA",
+			features: DPIFeatures{
+				hasCustomOIDs:     true,
+				weakSignature:     false,
+				suspiciousSerial:  false,
+				recentIssuance:    true,
+				longValidity:      true,
+				corporateDomain:   "zscaler.com",
+				includesSCT:       false,
+			},
+		},
+		{
+			name:   "Netskope",
+			vendor: "Netskope",
+			org:    "Netskope Inc.",
+			cn:     "Netskope Certificate Authority",
+			features: DPIFeatures{
+				hasCustomOIDs:     false,
+				weakSignature:     false,
+				suspiciousSerial:  false,
+				recentIssuance:    true,
+				longValidity:      true,
+				corporateDomain:   "netskope.com",
+				includesSCT:       false,
+			},
+		},
+		{
+			name:   "Generic Corporate",
+			vendor: "Acme Corp",
+			org:    "Acme Corporation",
+			cn:     "Acme Corporate Security CA",
+			features: DPIFeatures{
+				hasCustomOIDs:     false,
+				weakSignature:     false,
+				suspiciousSerial:  true,
+				recentIssuance:    true,
+				longValidity:      false,
+				corporateDomain:   "acme.corp",
+				includesSCT:       false,
+			},
+		},
+		{
+			name:   "Malicious DPI",
+			vendor: "Suspicious Corp",
+			org:    "Test Demo Corporation",
+			cn:     "Test-CA-localhost",
+			features: DPIFeatures{
+				hasCustomOIDs:     false,
+				weakSignature:     true,
+				suspiciousSerial:  true,
+				recentIssuance:    true,
+				longValidity:      false,
+				corporateDomain:   "test.local",
+				includesSCT:       false,
+			},
+		},
+	}
+
+	for _, scenario := range scenarios {
+		t.Run(scenario.name, func(t *testing.T) {
+			t.Logf("Testing %s DPI simulation", scenario.name)
+			
+			// Create realistic DPI environment
+			mockCA, mockCAKey := createRealisticDPICA(t, scenario.vendor, scenario.org, scenario.cn, scenario.features)
+			serverCert, serverKey := createServerCert(t, mockCA, mockCAKey)
+			
+			// Start mock server
+			server := createMockDPIServerWithCA(t, serverCert, serverKey, mockCA)
+			defer server.Close()
+			
+			// Test detection
+			testDPIDetection(t, server.URL, scenario.name, scenario.features.shouldBeDetected())
+		})
+	}
+}
+
+// DPIFeatures defines characteristics of different DPI implementations
+type DPIFeatures struct {
+	hasCustomOIDs    bool
+	weakSignature    bool
+	suspiciousSerial bool
+	recentIssuance   bool
+	longValidity     bool
+	corporateDomain  string
+	includesSCT      bool
+}
+
+func (f DPIFeatures) shouldBeDetected() bool {
+	// Corporate DPI should typically NOT be detected if properly configured
+	// Only detect if there are multiple suspicious characteristics beyond normal DPI behavior
+	suspiciousCount := 0
+	if f.weakSignature {
+		suspiciousCount++
+	}
+	if f.suspiciousSerial {
+		suspiciousCount++
+	}
+	// Recent issuance alone is not suspicious for corporate DPI
+	// Long validity alone is not suspicious for corporate DPI
+	
+	// Corporate DPI should only be flagged as malicious if it has multiple red flags
+	return suspiciousCount >= 2
+}
+
+// TestAdvancedDPITechniques tests sophisticated DPI evasion and detection
+func TestAdvancedDPITechniques(t *testing.T) {
+	t.Log("=== Testing Advanced DPI Techniques ===")
+
+	tests := []struct {
+		name        string
+		description string
+		setupFunc   func(t *testing.T) (*httptest.Server, func())
+	}{
+		{
+			name:        "Certificate Chain Manipulation",
+			description: "DPI that modifies intermediate certificates",
+			setupFunc:   setupChainManipulationDPI,
+		},
+		{
+			name:        "SNI-based Certificate Swapping",
+			description: "DPI that serves different certs based on SNI",
+			setupFunc:   setupSNIBasedDPI,
+		},
+		{
+			name:        "Timing-based Detection Evasion",
+			description: "DPI that uses realistic certificate lifetimes",
+			setupFunc:   setupTimingEvasionDPI,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Logf("Testing: %s", test.description)
+			server, cleanup := test.setupFunc(t)
+			defer cleanup()
+			
+			// Test advanced detection capabilities
+			testAdvancedDetection(t, server.URL, test.name)
+		})
+	}
+}
+
+// Helper functions for realistic DPI simulation
+
+func createRealisticDPICA(t *testing.T, vendor, org, cn string, features DPIFeatures) (*x509.Certificate, *rsa.PrivateKey) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Failed to generate private key: %v", err)
+	}
+
+	// Create realistic serial number
+	var serialNumber *big.Int
+	if features.suspiciousSerial {
+		serialNumber = big.NewInt(1) // Suspicious
+	} else {
+		// Generate realistic serial number
+		serialBytes := make([]byte, 16)
+		rand.Read(serialBytes)
+		serialNumber = new(big.Int).SetBytes(serialBytes)
+	}
+
+	// Set validity period
+	notBefore := time.Now()
+	if features.recentIssuance {
+		notBefore = time.Now().Add(-2 * time.Hour) // Recently issued
+	} else {
+		notBefore = time.Now().Add(-30 * 24 * time.Hour) // Older
+	}
+
+	var notAfter time.Time
+	if features.longValidity {
+		notAfter = notBefore.Add(10 * 365 * 24 * time.Hour) // 10 years
+	} else {
+		notAfter = notBefore.Add(365 * 24 * time.Hour) // 1 year
+	}
+
+	// Choose signature algorithm
+	var sigAlgo x509.SignatureAlgorithm
+	if features.weakSignature {
+		sigAlgo = x509.SHA1WithRSA // Weak
+	} else {
+		sigAlgo = x509.SHA256WithRSA // Strong
+	}
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization:  []string{org},
+			Country:       []string{"US"},
+			Province:      []string{"CA"},
+			Locality:      []string{"San Francisco"},
+			StreetAddress: []string{},
+			PostalCode:    []string{},
+			CommonName:    cn,
+		},
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		SignatureAlgorithm:    sigAlgo,
+	}
+
+	// Add custom OIDs for enterprise DPI vendors
+	if features.hasCustomOIDs {
+		// Add vendor-specific extensions (simulated)
+		template.ExtraExtensions = []pkix.Extension{
+			{
+				Id:       []int{1, 3, 6, 1, 4, 1, 25461, 1}, // Palo Alto OID space
+				Critical: false,
+				Value:    []byte("PaloAltoNetworks"),
+			},
+		}
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		t.Fatalf("Failed to create certificate: %v", err)
+	}
+
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		t.Fatalf("Failed to parse certificate: %v", err)
+	}
+
+	return cert, privateKey
+}
+
+func testDPIDetection(t *testing.T, serverURL, scenario string, shouldDetect bool) {
+	// Download Mozilla CA bundle
+	mozillaCAs, _, err := bundle.DownloadAndValidate()
+	if err != nil {
+		t.Skipf("Skipping test - cannot download Mozilla CA bundle: %v", err)
+	}
+
+	// Get certificate chain
+	certs, err := network.GetCertificateChain(serverURL)
+	if err != nil {
+		t.Fatalf("Failed to get certificate chain: %v", err)
+	}
+
+	// For corporate DPI testing, focus on CA certificate detection rather than overall suspicious behavior
+	// Count only CA-specific suspicious behaviors
+	caSuspiciousCount := 0
+	var caBehaviors []string
+	
+	for _, cert := range certs {
+		if cert.IsCA {
+			// Check if this CA is trusted
+			isTrusted := analysis.IsTrustedCA(cert, mozillaCAs, certs)
+			if !isTrusted {
+				t.Logf("Unknown CA detected: %s", cert.Subject.CommonName)
+				
+				// Check for CA-specific suspicious behaviors
+				result := security.PerformEnhancedValidation([]*x509.Certificate{cert}, mozillaCAs, serverURL)
+				for _, behavior := range result.SuspiciousBehaviors {
+					// Filter for CA-specific issues (ignore server cert issues)
+					if strings.Contains(behavior, cert.Subject.CommonName) {
+						caBehaviors = append(caBehaviors, behavior)
+						if strings.Contains(behavior, "weak signature") || 
+						   strings.Contains(behavior, "trivial serial") ||
+						   strings.Contains(behavior, "suspicious term") {
+							caSuspiciousCount++
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Realistic corporate DPI should be detected as "unknown CA" but not necessarily "malicious"
+	// Only flag as malicious if CA has multiple red flags
+	detected := caSuspiciousCount >= 2
+
+	if shouldDetect && !detected {
+		t.Errorf("Expected %s DPI to be detected but wasn't (CA suspicious count: %d)", scenario, caSuspiciousCount)
+	} else if !shouldDetect && detected {
+		t.Errorf("Expected %s DPI to not be detected but was (CA suspicious count: %d)", scenario, caSuspiciousCount)
+	} else {
+		t.Logf("✓ %s DPI detection result correct: detected=%v (CA suspicious count: %d)", scenario, detected, caSuspiciousCount)
+	}
+
+	if len(caBehaviors) > 0 {
+		t.Logf("CA-specific suspicious behaviors:")
+		for _, behavior := range caBehaviors {
+			t.Logf("  - %s", behavior)
+		}
+	}
+}
+
+// Advanced DPI setup functions
+
+func setupChainManipulationDPI(t *testing.T) (*httptest.Server, func()) {
+	// Create a realistic corporate CA
+	corpCA, corpCAKey := createRealisticDPICA(t, "Acme Corp", "Acme Corporation", "Acme Root CA", DPIFeatures{
+		hasCustomOIDs:    false,
+		weakSignature:    false,
+		suspiciousSerial: false,
+		recentIssuance:   true,
+		longValidity:     true,
+		corporateDomain:  "acme.corp",
+		includesSCT:      false,
+	})
+
+	// Create intermediate CA
+	intermediateCA, intermediateKey := createIntermediateCA(t, corpCA, corpCAKey)
+
+	// Create server cert signed by intermediate
+	serverCert, serverKey := createServerCertFromIntermediate(t, intermediateCA, intermediateKey)
+
+	// Create server with full chain
+	server := createMockDPIServerWithFullChain(t, serverCert, serverKey, []*x509.Certificate{intermediateCA, corpCA})
+
+	cleanup := func() {
+		server.Close()
+	}
+
+	return server, cleanup
+}
+
+func setupSNIBasedDPI(t *testing.T) (*httptest.Server, func()) {
+	// This would simulate DPI that serves different certificates based on SNI
+	// For testing purposes, we'll create a single realistic corporate DPI
+	mockCA, mockCAKey := createRealisticDPICA(t, "Corporate Firewall", "SecureCorp Inc.", "SecureCorp TLS Inspection CA", DPIFeatures{
+		hasCustomOIDs:    false,
+		weakSignature:    false,
+		suspiciousSerial: false,
+		recentIssuance:   false,
+		longValidity:     true,
+		corporateDomain:  "securecorp.local",
+		includesSCT:      false,
+	})
+
+	serverCert, serverKey := createServerCert(t, mockCA, mockCAKey)
+	server := createMockDPIServerWithCA(t, serverCert, serverKey, mockCA)
+
+	cleanup := func() {
+		server.Close()
+	}
+
+	return server, cleanup
+}
+
+func setupTimingEvasionDPI(t *testing.T) (*httptest.Server, func()) {
+	// Create DPI that uses realistic timing to evade detection
+	mockCA, mockCAKey := createTimingEvasionCA(t)
+	serverCert, serverKey := createServerCert(t, mockCA, mockCAKey)
+	server := createMockDPIServerWithCA(t, serverCert, serverKey, mockCA)
+
+	cleanup := func() {
+		server.Close()
+	}
+
+	return server, cleanup
+}
+
+func createIntermediateCA(t *testing.T, rootCA *x509.Certificate, rootKey *rsa.PrivateKey) (*x509.Certificate, *rsa.PrivateKey) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Failed to generate intermediate key: %v", err)
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject: pkix.Name{
+			Organization: []string{"Acme Corporation"},
+			Country:      []string{"US"},
+			CommonName:   "Acme Intermediate CA",
+		},
+		NotBefore:             time.Now().Add(-365 * 24 * time.Hour),
+		NotAfter:              time.Now().Add(5 * 365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLen:            0,
+		MaxPathLenZero:        true,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, rootCA, &privateKey.PublicKey, rootKey)
+	if err != nil {
+		t.Fatalf("Failed to create intermediate certificate: %v", err)
+	}
+
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		t.Fatalf("Failed to parse intermediate certificate: %v", err)
+	}
+
+	return cert, privateKey
+}
+
+func createServerCertFromIntermediate(t *testing.T, intermediateCA *x509.Certificate, intermediateKey *rsa.PrivateKey) (*x509.Certificate, *rsa.PrivateKey) {
+	serverKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Failed to generate server key: %v", err)
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(3),
+		Subject: pkix.Name{
+			Organization: []string{"Test Server"},
+			Country:      []string{"US"},
+			CommonName:   "localhost",
+		},
+		NotBefore:   time.Now().Add(-24 * time.Hour),
+		NotAfter:    time.Now().Add(90 * 24 * time.Hour),
+		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1)},
+		DNSNames:    []string{"localhost"},
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, intermediateCA, &serverKey.PublicKey, intermediateKey)
+	if err != nil {
+		t.Fatalf("Failed to create server certificate: %v", err)
+	}
+
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		t.Fatalf("Failed to parse server certificate: %v", err)
+	}
+
+	return cert, serverKey
+}
+
+func createMockDPIServerWithFullChain(t *testing.T, serverCert *x509.Certificate, serverKey *rsa.PrivateKey, chain []*x509.Certificate) *httptest.Server {
+	certChain := [][]byte{serverCert.Raw}
+	for _, cert := range chain {
+		certChain = append(certChain, cert.Raw)
+	}
+
+	tlsCert := tls.Certificate{
+		Certificate: certChain,
+		PrivateKey:  serverKey,
+	}
+
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Mock DPI Server with Full Chain"))
+	}))
+
+	server.TLS = &tls.Config{
+		Certificates: []tls.Certificate{tlsCert},
+	}
+	server.StartTLS()
+
+	return server
+}
+
+func createTimingEvasionCA(t *testing.T) (*x509.Certificate, *rsa.PrivateKey) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Failed to generate private key: %v", err)
+	}
+
+	// Use realistic timing to evade detection
+	issuedDate := time.Now().Add(-90 * 24 * time.Hour) // 3 months ago
+	expiryDate := issuedDate.Add(2 * 365 * 24 * time.Hour) // 2 years validity
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(0x1234567890abcdef), // Realistic serial
+		Subject: pkix.Name{
+			Organization: []string{"Enterprise Security Solutions"},
+			Country:      []string{"US"},
+			CommonName:   "Enterprise TLS Inspection Root CA",
+		},
+		NotBefore:             issuedDate,
+		NotAfter:              expiryDate,
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		t.Fatalf("Failed to create certificate: %v", err)
+	}
+
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		t.Fatalf("Failed to parse certificate: %v", err)
+	}
+
+	return cert, privateKey
+}
+
+func testAdvancedDetection(t *testing.T, serverURL, testName string) {
+	mozillaCAs, _, err := bundle.DownloadAndValidate()
+	if err != nil {
+		t.Skipf("Skipping test - cannot download Mozilla CA bundle: %v", err)
+	}
+
+	certs, err := network.GetCertificateChain(serverURL)
+	if err != nil {
+		t.Fatalf("Failed to get certificate chain: %v", err)
+	}
+
+	result := security.PerformEnhancedValidation(certs, mozillaCAs, serverURL)
+	
+	t.Logf("Advanced detection results for %s:", testName)
+	t.Logf("  Certificates in chain: %d", len(certs))
+	t.Logf("  Suspicious behaviors: %d", len(result.SuspiciousBehaviors))
+	t.Logf("  CT issues: %d", len(result.CTIssues))
+	
+	if len(result.SuspiciousBehaviors) > 0 {
+		for _, behavior := range result.SuspiciousBehaviors {
+			t.Logf("    - %s", behavior)
+		}
+	}
+}
+
 // TestIntegration runs a complete integration test
 func TestIntegration(t *testing.T) {
 	if testing.Short() {
