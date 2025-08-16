@@ -1,0 +1,489 @@
+package analysis
+
+import (
+	"crypto/ecdsa"
+	"crypto/rsa"
+	"crypto/x509"
+	"fmt"
+	"math/big"
+	"strings"
+	"time"
+)
+
+// ChainAnalysis provides detailed analysis of a certificate chain
+type ChainAnalysis struct {
+	Endpoint    string
+	Certificates []CertificateInfo
+	Summary     ChainSummary
+	DPIClues    []string
+	MitMClues   []string
+	Anomalies   []string
+}
+
+// CertificateInfo contains details about a single certificate
+type CertificateInfo struct {
+	Position    int    // 1-based position in chain
+	Type        string // "Leaf", "Intermediate", "Root"
+	Subject     string
+	Issuer      string
+	SerialNumber string
+	NotBefore   time.Time
+	NotAfter    time.Time
+	KeySize     int
+	SignatureAlg string
+	IsTrusted   bool
+	IsCA        bool
+	Issues      []string
+}
+
+// ChainSummary provides overview of the certificate chain
+type ChainSummary struct {
+	TotalCerts    int
+	LeafCerts     int
+	Intermediate  int
+	RootCerts     int
+	TrustedChain  bool
+	SuspiciousCount int
+}
+
+// AnalyzeCertificateChain performs comprehensive analysis of a certificate chain
+func AnalyzeCertificateChain(endpoint string, certs []*x509.Certificate, mozillaCAs *x509.CertPool) *ChainAnalysis {
+	analysis := &ChainAnalysis{
+		Endpoint:     endpoint,
+		Certificates: make([]CertificateInfo, len(certs)),
+		Summary: ChainSummary{
+			TotalCerts: len(certs),
+		},
+	}
+
+	// Analyze each certificate
+	for i, cert := range certs {
+		certInfo := analyzeCertificate(cert, i+1, certs, mozillaCAs)
+		analysis.Certificates[i] = certInfo
+
+		// Update summary counts
+		switch certInfo.Type {
+		case "Leaf":
+			analysis.Summary.LeafCerts++
+		case "Intermediate":
+			analysis.Summary.Intermediate++
+		case "Root":
+			analysis.Summary.RootCerts++
+		}
+
+		if len(certInfo.Issues) > 0 {
+			analysis.Summary.SuspiciousCount++
+		}
+	}
+
+	// Check overall chain trust
+	analysis.Summary.TrustedChain = hasValidTrustPath(certs, mozillaCAs)
+
+	// Detect DPI/MitM clues
+	analysis.DPIClues = detectDPIClues(certs, endpoint)
+	analysis.MitMClues = detectMitMClues(certs, endpoint)
+	analysis.Anomalies = detectChainAnomalies(certs)
+
+	return analysis
+}
+
+// analyzeCertificate analyzes a single certificate
+func analyzeCertificate(cert *x509.Certificate, position int, chain []*x509.Certificate, mozillaCAs *x509.CertPool) CertificateInfo {
+	info := CertificateInfo{
+		Position:     position,
+		Subject:      cert.Subject.CommonName,
+		Issuer:       cert.Issuer.CommonName,
+		SerialNumber: cert.SerialNumber.String(),
+		NotBefore:    cert.NotBefore,
+		NotAfter:     cert.NotAfter,
+		IsCA:         cert.IsCA,
+		SignatureAlg: cert.SignatureAlgorithm.String(),
+	}
+
+	// Determine certificate type
+	if position == 1 {
+		info.Type = "Leaf"
+	} else if cert.IsCA {
+		if isSelfSigned(cert) {
+			info.Type = "Root"
+		} else {
+			info.Type = "Intermediate"
+		}
+	} else {
+		info.Type = "Unknown"
+	}
+
+	// Get key size
+	info.KeySize = getKeySize(cert)
+
+	// Check if trusted
+	info.IsTrusted = IsTrustedCA(cert, mozillaCAs, chain)
+
+	// Detect issues
+	info.Issues = detectCertificateIssues(cert, chain)
+
+	return info
+}
+
+// detectDPIClues identifies signs of corporate DPI
+func detectDPIClues(certs []*x509.Certificate, endpoint string) []string {
+	var clues []string
+
+	for _, cert := range certs {
+		if !cert.IsCA {
+			continue
+		}
+
+		// Check for DPI vendor patterns
+		subject := strings.ToLower(cert.Subject.String())
+		issuer := strings.ToLower(cert.Issuer.String())
+
+		dpiVendors := []string{
+			"palo alto", "zscaler", "netskope", "forcepoint", "cisco", "bluecoat",
+			"mcafee", "symantec proxy", "websense", "checkpoint", "fortinet",
+			"sophos", "barracuda", "iboss", "lightspeed", "contentkeeper",
+		}
+
+		for _, vendor := range dpiVendors {
+			if strings.Contains(subject, vendor) || strings.Contains(issuer, vendor) {
+				clues = append(clues, fmt.Sprintf("DPI vendor detected: %s in certificate", vendor))
+			}
+		}
+
+		// Check for corporate DPI patterns
+		corporateTerms := []string{
+			"corporate", "enterprise", "firewall", "proxy", "inspection",
+			"security", "gateway", "filter", "protection", "monitor",
+		}
+
+		for _, term := range corporateTerms {
+			if strings.Contains(subject, term) || strings.Contains(issuer, term) {
+				clues = append(clues, fmt.Sprintf("Corporate DPI term: '%s' found", term))
+			}
+		}
+
+		// Check for self-signed corporate CAs
+		if isSelfSigned(cert) && !IsTrustedCA(cert, nil, certs) {
+			clues = append(clues, "Unknown self-signed CA (likely corporate DPI)")
+		}
+	}
+
+	return clues
+}
+
+// detectMitMClues identifies signs of malicious MitM
+func detectMitMClues(certs []*x509.Certificate, endpoint string) []string {
+	var clues []string
+
+	// Check for CA impersonation
+	for _, cert := range certs {
+		if cert.IsCA && isCAImpersonation(cert) {
+			clues = append(clues, fmt.Sprintf("CA impersonation detected: %s", cert.Subject.CommonName))
+		}
+	}
+
+	// Check for high-risk behaviors
+	highRiskIndicators := 0
+	for _, cert := range certs {
+		if containsWeakSignature(cert) {
+			highRiskIndicators++
+		}
+		if hasTrivialSerial(cert) {
+			highRiskIndicators++
+		}
+		if containsSuspiciousTerms(cert) {
+			highRiskIndicators++
+		}
+	}
+
+	if highRiskIndicators >= 3 {
+		clues = append(clues, fmt.Sprintf("HIGH RISK: %d suspicious behaviors detected", highRiskIndicators))
+	}
+
+	// Check for timing anomalies
+	for _, cert := range certs {
+		if time.Since(cert.NotBefore) < 24*time.Hour {
+			clues = append(clues, "Recently issued certificate (potential attack)")
+		}
+		
+		validity := cert.NotAfter.Sub(cert.NotBefore)
+		if validity < 7*24*time.Hour {
+			clues = append(clues, "Unusually short certificate validity period")
+		}
+	}
+
+	return clues
+}
+
+// Helper functions for MitM detection
+
+func isCAImpersonation(cert *x509.Certificate) bool {
+	subject := strings.ToLower(cert.Subject.String())
+	
+	// Known legitimate CA names that shouldn't appear in corporate DPI
+	legitimateCAs := []string{
+		"google trust services", "digicert", "let's encrypt", "comodo",
+		"symantec", "globalsign", "entrust", "geotrust", "thawte",
+		"godaddy", "rapidssl", "starfield", "amazon", "microsoft",
+	}
+	
+	for _, ca := range legitimateCAs {
+		if strings.Contains(subject, ca) {
+			// Check if this is actually signed by the legitimate CA
+			// If self-signed or has other suspicious characteristics, it's likely impersonation
+			if isSelfSigned(cert) {
+				return true
+			}
+		}
+	}
+	
+	return false
+}
+
+func containsWeakSignature(cert *x509.Certificate) bool {
+	return strings.Contains(strings.ToLower(cert.SignatureAlgorithm.String()), "sha1")
+}
+
+func hasTrivialSerial(cert *x509.Certificate) bool {
+	return cert.SerialNumber.Cmp(big.NewInt(1000)) < 0
+}
+
+func containsSuspiciousTerms(cert *x509.Certificate) bool {
+	subject := strings.ToLower(cert.Subject.String())
+	suspiciousTerms := []string{"test", "demo", "localhost", "example", "invalid"}
+	
+	for _, term := range suspiciousTerms {
+		if strings.Contains(subject, term) {
+			return true
+		}
+	}
+	return false
+}
+
+// detectChainAnomalies identifies structural problems in the certificate chain
+func detectChainAnomalies(certs []*x509.Certificate) []string {
+	var anomalies []string
+
+	if len(certs) == 0 {
+		return []string{"No certificates in chain"}
+	}
+
+	// Check for missing intermediate certificates
+	if len(certs) == 2 && certs[1].IsCA && isSelfSigned(certs[1]) {
+		// Direct leaf -> root (missing intermediates possible)
+		anomalies = append(anomalies, "Potentially missing intermediate certificates")
+	}
+
+	// Check for unusual chain length
+	if len(certs) > 5 {
+		anomalies = append(anomalies, fmt.Sprintf("Unusually long certificate chain (%d certificates)", len(certs)))
+	}
+
+	// Check for multiple leaf certificates
+	leafCount := 0
+	for _, cert := range certs {
+		if !cert.IsCA {
+			leafCount++
+		}
+	}
+	if leafCount > 1 {
+		anomalies = append(anomalies, fmt.Sprintf("Multiple leaf certificates found (%d)", leafCount))
+	}
+
+	// Check for broken chain order
+	for i := 0; i < len(certs)-1; i++ {
+		if !isSignedBy(certs[i], certs[i+1]) {
+			anomalies = append(anomalies, fmt.Sprintf("Broken chain: cert %d not signed by cert %d", i+1, i+2))
+		}
+	}
+
+	return anomalies
+}
+
+// detectCertificateIssues finds problems with individual certificates
+func detectCertificateIssues(cert *x509.Certificate, chain []*x509.Certificate) []string {
+	var issues []string
+
+	// Check expiration
+	if time.Now().After(cert.NotAfter) {
+		issues = append(issues, "Certificate expired")
+	} else if time.Until(cert.NotAfter) < 30*24*time.Hour {
+		issues = append(issues, "Certificate expires soon")
+	}
+
+	// Check key size
+	keySize := getKeySize(cert)
+	if keySize > 0 && keySize < 2048 {
+		issues = append(issues, fmt.Sprintf("Weak key size (%d bits)", keySize))
+	}
+
+	// Check signature algorithm
+	if strings.Contains(strings.ToLower(cert.SignatureAlgorithm.String()), "sha1") {
+		issues = append(issues, "Weak signature algorithm (SHA1)")
+	}
+
+	// Check serial number
+	if cert.SerialNumber.Cmp(big.NewInt(1000)) < 0 {
+		issues = append(issues, "Suspiciously simple serial number")
+	}
+
+	// Check for suspicious terms
+	suspiciousTerms := []string{"test", "demo", "localhost", "example", "invalid"}
+	subject := strings.ToLower(cert.Subject.String())
+	for _, term := range suspiciousTerms {
+		if strings.Contains(subject, term) {
+			issues = append(issues, fmt.Sprintf("Suspicious term: %s", term))
+		}
+	}
+
+	return issues
+}
+
+// Helper functions
+
+func hasValidTrustPath(certs []*x509.Certificate, mozillaCAs *x509.CertPool) bool {
+	if len(certs) == 0 {
+		return false
+	}
+
+	for _, cert := range certs {
+		if cert.IsCA && IsTrustedCA(cert, mozillaCAs, certs) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSelfSigned(cert *x509.Certificate) bool {
+	return cert.Subject.String() == cert.Issuer.String()
+}
+
+func isSignedBy(child, parent *x509.Certificate) bool {
+	return child.CheckSignatureFrom(parent) == nil
+}
+
+func getKeySize(cert *x509.Certificate) int {
+	switch key := cert.PublicKey.(type) {
+	case *rsa.PublicKey:
+		return key.N.BitLen()
+	case *ecdsa.PublicKey:
+		return key.Curve.Params().BitSize
+	default:
+		return 0
+	}
+}
+
+// DisplayChainAnalysis returns a formatted string representation of the chain analysis
+func (analysis *ChainAnalysis) DisplayChainAnalysis() string {
+	var output strings.Builder
+
+	// Header
+	output.WriteString(fmt.Sprintf("Certificate Chain Analysis for %s\n", analysis.Endpoint))
+	output.WriteString(strings.Repeat("=", 60) + "\n\n")
+
+	// Summary
+	output.WriteString("Chain Summary:\n")
+	output.WriteString(fmt.Sprintf("  Total certificates: %d\n", analysis.Summary.TotalCerts))
+	output.WriteString(fmt.Sprintf("  Chain structure: %d leaf + %d intermediate + %d root\n", 
+		analysis.Summary.LeafCerts, analysis.Summary.Intermediate, analysis.Summary.RootCerts))
+	
+	if analysis.Summary.TrustedChain {
+		output.WriteString("  Trust status: ✓ Trusted chain\n")
+	} else {
+		output.WriteString("  Trust status: ⚠ Untrusted chain\n")
+	}
+	
+	if analysis.Summary.SuspiciousCount > 0 {
+		output.WriteString(fmt.Sprintf("  Security issues: ⚠ %d certificates with issues\n", analysis.Summary.SuspiciousCount))
+	} else {
+		output.WriteString("  Security issues: ✓ No major issues detected\n")
+	}
+	output.WriteString("\n")
+
+	// Certificate details
+	output.WriteString("Certificate Chain:\n")
+	for _, cert := range analysis.Certificates {
+		output.WriteString(formatCertificate(cert))
+	}
+
+	// DPI clues
+	if len(analysis.DPIClues) > 0 {
+		output.WriteString("\nCorporate DPI Indicators:\n")
+		for _, clue := range analysis.DPIClues {
+			output.WriteString(fmt.Sprintf("  🔍 %s\n", clue))
+		}
+	}
+
+	// MitM clues
+	if len(analysis.MitMClues) > 0 {
+		output.WriteString("\nMalicious MitM Indicators:\n")
+		for _, clue := range analysis.MitMClues {
+			output.WriteString(fmt.Sprintf("  🚨 %s\n", clue))
+		}
+	}
+
+	// Anomalies
+	if len(analysis.Anomalies) > 0 {
+		output.WriteString("\nChain Anomalies:\n")
+		for _, anomaly := range analysis.Anomalies {
+			output.WriteString(fmt.Sprintf("  ⚠ %s\n", anomaly))
+		}
+	}
+
+	return output.String()
+}
+
+// formatCertificate formats a single certificate for display
+func formatCertificate(cert CertificateInfo) string {
+	var output strings.Builder
+
+	// Certificate header with type and trust status
+	trustIndicator := "✓"
+	if !cert.IsTrusted {
+		trustIndicator = "⚠"
+	}
+
+	output.WriteString(fmt.Sprintf("  [%d] %s %s Certificate - %s\n", 
+		cert.Position, trustIndicator, cert.Type, cert.Subject))
+
+	// Basic details
+	if cert.Subject != cert.Issuer {
+		output.WriteString(fmt.Sprintf("      Issued by: %s\n", cert.Issuer))
+	} else {
+		output.WriteString("      Issued by: Self-signed\n")
+	}
+
+	// Validity period
+	validity := cert.NotAfter.Sub(cert.NotBefore)
+	output.WriteString(fmt.Sprintf("      Valid: %s to %s (%.1f days)\n", 
+		cert.NotBefore.Format("2006-01-02"), 
+		cert.NotAfter.Format("2006-01-02"),
+		validity.Hours()/24))
+
+	// Technical details
+	keyInfo := ""
+	if cert.KeySize > 0 {
+		keyInfo = fmt.Sprintf("%d-bit", cert.KeySize)
+	}
+	output.WriteString(fmt.Sprintf("      Key: %s %s, Serial: %s\n", 
+		keyInfo, cert.SignatureAlg, truncateSerial(cert.SerialNumber)))
+
+	// Issues
+	if len(cert.Issues) > 0 {
+		output.WriteString("      Issues:\n")
+		for _, issue := range cert.Issues {
+			output.WriteString(fmt.Sprintf("        • %s\n", issue))
+		}
+	}
+
+	output.WriteString("\n")
+	return output.String()
+}
+
+// truncateSerial truncates long serial numbers for display
+func truncateSerial(serial string) string {
+	if len(serial) > 16 {
+		return serial[:8] + "..." + serial[len(serial)-8:]
+	}
+	return serial
+}

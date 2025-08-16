@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/kaakaww/cypherhawk/internal/analysis"
 	"github.com/kaakaww/cypherhawk/internal/bundle"
 	"github.com/kaakaww/cypherhawk/internal/network"
 	"github.com/kaakaww/cypherhawk/internal/output"
@@ -20,9 +22,10 @@ var (
 
 var (
 	outputFile  = flag.String("o", "", "Output file for CA certificates (use '-' for stdout)")
-	targetURL   = flag.String("url", "", "Custom target URL to test (overrides default endpoints)")
+	targetURL   = flag.String("url", "", "Custom target URL to test (assumes https:// if no protocol specified)")
 	verbose     = flag.Bool("verbose", false, "Enable verbose output")
 	showVersion = flag.Bool("version", false, "Show version information")
+	analyzeChain = flag.Bool("analyze", false, "Show detailed certificate chain analysis")
 )
 
 // Default endpoints representing common corporate network requirements
@@ -31,6 +34,17 @@ var defaultEndpoints = []string{
 	"https://auth.stackhawk.com",
 	"https://api.stackhawk.com",
 	"https://s3.us-west-2.amazonaws.com",
+}
+
+// normalizeURL ensures the URL has a protocol prefix, defaulting to https://
+func normalizeURL(url string) string {
+	// If the URL already has a protocol, return as-is
+	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+		return url
+	}
+	
+	// Add https:// prefix by default
+	return "https://" + url
 }
 
 func main() {
@@ -61,7 +75,8 @@ func main() {
 	// Step 2: Determine endpoints to test
 	endpoints := defaultEndpoints
 	if *targetURL != "" {
-		endpoints = []string{*targetURL}
+		normalizedURL := normalizeURL(*targetURL)
+		endpoints = []string{normalizedURL}
 	}
 
 	// Step 3: Test endpoints and collect unknown certificates
@@ -82,6 +97,13 @@ func main() {
 		successCount++
 		if *verbose {
 			fmt.Fprintf(os.Stderr, "Retrieved %d certificates from %s\n", len(certs), endpoint)
+		}
+
+		// Certificate chain analysis (if requested)
+		if *analyzeChain {
+			chainAnalysis := analysis.AnalyzeCertificateChain(endpoint, certs, mozillaCAs)
+			fmt.Print(chainAnalysis.DisplayChainAnalysis())
+			fmt.Println() // Add spacing between endpoints
 		}
 
 		// Enhanced security validation with multiple techniques
@@ -113,15 +135,26 @@ func main() {
 		os.Exit(2)
 	}
 
+	// If we're just doing chain analysis, exit here
+	if *analyzeChain {
+		os.Exit(0)
+	}
+
 	if len(unknownCerts) == 0 {
-		if *verbose {
-			fmt.Fprintf(os.Stderr, "No unknown CA certificates detected - no DPI/MitM proxy found\n")
-		}
+		// Always show success message (not just in verbose mode)
+		fmt.Fprintf(os.Stderr, "✓ No corporate DPI detected (tested %d endpoint%s)\n", 
+			successCount, 
+			func() string { if successCount == 1 { return "" } else { return "s" } }())
 		os.Exit(0)
 	}
 
 	// Step 5: Output unknown certificates in PEM format
 	pemOutput := output.GeneratePEM(unknownCerts)
+
+	// Show detection summary
+	fmt.Fprintf(os.Stderr, "⚠ Corporate DPI detected: found %d unknown CA certificate%s\n", 
+		len(unknownCerts),
+		func() string { if len(unknownCerts) == 1 { return "" } else { return "s" } }())
 
 	if *outputFile == "" || *outputFile == "-" {
 		fmt.Print(pemOutput)
@@ -131,9 +164,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error writing to file %s: %v\n", *outputFile, err)
 			os.Exit(2)
 		}
-		if *verbose {
-			fmt.Fprintf(os.Stderr, "Wrote %d unknown CA certificates to %s\n", len(unknownCerts), *outputFile)
-		}
+		fmt.Fprintf(os.Stderr, "Certificates saved to: %s\n", *outputFile)
 	}
 
 	// Exit with partial failure code if some endpoints failed
