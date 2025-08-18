@@ -12,37 +12,37 @@ import (
 
 // ChainAnalysis provides detailed analysis of a certificate chain
 type ChainAnalysis struct {
-	Endpoint    string
+	Endpoint     string
 	Certificates []CertificateInfo
-	Summary     ChainSummary
-	DPIClues    []string
-	MitMClues   []string
-	Anomalies   []string
+	Summary      ChainSummary
+	DPIClues     []string
+	MitMClues    []string
+	Anomalies    []string
 }
 
 // CertificateInfo contains details about a single certificate
 type CertificateInfo struct {
-	Position    int    // 1-based position in chain
-	Type        string // "Leaf", "Intermediate", "Root"
-	Subject     string
-	Issuer      string
+	Position     int    // 1-based position in chain
+	Type         string // "Leaf", "Intermediate", "Root"
+	Subject      string
+	Issuer       string
 	SerialNumber string
-	NotBefore   time.Time
-	NotAfter    time.Time
-	KeySize     int
+	NotBefore    time.Time
+	NotAfter     time.Time
+	KeyInfo      KeyInfo
 	SignatureAlg string
-	IsTrusted   bool
-	IsCA        bool
-	Issues      []string
+	IsTrusted    bool
+	IsCA         bool
+	Issues       []string
 }
 
 // ChainSummary provides overview of the certificate chain
 type ChainSummary struct {
-	TotalCerts    int
-	LeafCerts     int
-	Intermediate  int
-	RootCerts     int
-	TrustedChain  bool
+	TotalCerts      int
+	LeafCerts       int
+	Intermediate    int
+	RootCerts       int
+	TrustedChain    bool
 	SuspiciousCount int
 }
 
@@ -113,8 +113,8 @@ func analyzeCertificate(cert *x509.Certificate, position int, chain []*x509.Cert
 		info.Type = "Unknown"
 	}
 
-	// Get key size
-	info.KeySize = getKeySize(cert)
+	// Get key information
+	info.KeyInfo = getKeyInfo(cert)
 
 	// Check if trusted
 	info.IsTrusted = IsTrustedCA(cert, mozillaCAs, chain)
@@ -205,7 +205,7 @@ func detectMitMClues(certs []*x509.Certificate, endpoint string) []string {
 		if time.Since(cert.NotBefore) < 24*time.Hour {
 			clues = append(clues, "Recently issued certificate (potential attack)")
 		}
-		
+
 		validity := cert.NotAfter.Sub(cert.NotBefore)
 		if validity < 7*24*time.Hour {
 			clues = append(clues, "Unusually short certificate validity period")
@@ -219,14 +219,14 @@ func detectMitMClues(certs []*x509.Certificate, endpoint string) []string {
 
 func isCAImpersonation(cert *x509.Certificate) bool {
 	subject := strings.ToLower(cert.Subject.String())
-	
+
 	// Known legitimate CA names that shouldn't appear in corporate DPI
 	legitimateCAs := []string{
 		"google trust services", "digicert", "let's encrypt", "comodo",
 		"symantec", "globalsign", "entrust", "geotrust", "thawte",
 		"godaddy", "rapidssl", "starfield", "amazon", "microsoft",
 	}
-	
+
 	for _, ca := range legitimateCAs {
 		if strings.Contains(subject, ca) {
 			// Check if this is actually signed by the legitimate CA
@@ -236,7 +236,7 @@ func isCAImpersonation(cert *x509.Certificate) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -251,7 +251,7 @@ func hasTrivialSerial(cert *x509.Certificate) bool {
 func containsSuspiciousTerms(cert *x509.Certificate) bool {
 	subject := strings.ToLower(cert.Subject.String())
 	suspiciousTerms := []string{"test", "demo", "localhost", "example", "invalid"}
-	
+
 	for _, term := range suspiciousTerms {
 		if strings.Contains(subject, term) {
 			return true
@@ -311,10 +311,14 @@ func detectCertificateIssues(cert *x509.Certificate, chain []*x509.Certificate) 
 		issues = append(issues, "Certificate expires soon")
 	}
 
-	// Check key size
-	keySize := getKeySize(cert)
-	if keySize > 0 && keySize < 2048 {
-		issues = append(issues, fmt.Sprintf("Weak key size (%d bits)", keySize))
+	// Check key strength using proper algorithm-specific logic
+	keyInfo := getKeyInfo(cert)
+	if keyInfo.IsWeak {
+		if keyInfo.Algorithm == "ECDSA" {
+			issues = append(issues, fmt.Sprintf("Weak %s key (%d-bit curve, ~%d-bit RSA equivalent)", keyInfo.Algorithm, keyInfo.Size, keyInfo.Equivalent))
+		} else {
+			issues = append(issues, fmt.Sprintf("Weak %s key size (%d bits)", keyInfo.Algorithm, keyInfo.Size))
+		}
 	}
 
 	// Check signature algorithm
@@ -362,15 +366,64 @@ func isSignedBy(child, parent *x509.Certificate) bool {
 	return child.CheckSignatureFrom(parent) == nil
 }
 
-func getKeySize(cert *x509.Certificate) int {
+// KeyInfo contains information about a certificate's public key
+type KeyInfo struct {
+	Algorithm  string
+	Size       int
+	Equivalent int // RSA-equivalent security level
+	IsWeak     bool
+}
+
+func getKeyInfo(cert *x509.Certificate) KeyInfo {
 	switch key := cert.PublicKey.(type) {
 	case *rsa.PublicKey:
-		return key.N.BitLen()
+		size := key.N.BitLen()
+		return KeyInfo{
+			Algorithm:  "RSA",
+			Size:       size,
+			Equivalent: size, // RSA size is the security level
+			IsWeak:     size < 2048,
+		}
 	case *ecdsa.PublicKey:
-		return key.Curve.Params().BitSize
+		curveSize := key.Curve.Params().BitSize
+		var equivalent int
+		var isWeak bool
+
+		// ECDSA to RSA equivalent security levels
+		switch curveSize {
+		case 256: // P-256
+			equivalent = 3072
+			isWeak = false
+		case 384: // P-384
+			equivalent = 7680
+			isWeak = false
+		case 224: // P-224 (weak)
+			equivalent = 2048
+			isWeak = true
+		default:
+			equivalent = curveSize * 12 // Rough approximation
+			isWeak = curveSize < 256
+		}
+
+		return KeyInfo{
+			Algorithm:  "ECDSA",
+			Size:       curveSize,
+			Equivalent: equivalent,
+			IsWeak:     isWeak,
+		}
 	default:
-		return 0
+		return KeyInfo{
+			Algorithm:  "Unknown",
+			Size:       0,
+			Equivalent: 0,
+			IsWeak:     true,
+		}
 	}
+}
+
+// Legacy function for backward compatibility
+func getKeySize(cert *x509.Certificate) int {
+	return getKeyInfo(cert).Size
 }
 
 // DisplayChainAnalysis returns a formatted string representation of the chain analysis
@@ -384,15 +437,15 @@ func (analysis *ChainAnalysis) DisplayChainAnalysis() string {
 	// Summary
 	output.WriteString("Chain Summary:\n")
 	output.WriteString(fmt.Sprintf("  Total certificates: %d\n", analysis.Summary.TotalCerts))
-	output.WriteString(fmt.Sprintf("  Chain structure: %d leaf + %d intermediate + %d root\n", 
+	output.WriteString(fmt.Sprintf("  Chain structure: %d leaf + %d intermediate + %d root\n",
 		analysis.Summary.LeafCerts, analysis.Summary.Intermediate, analysis.Summary.RootCerts))
-	
+
 	if analysis.Summary.TrustedChain {
 		output.WriteString("  Trust status: ✓ Trusted chain\n")
 	} else {
 		output.WriteString("  Trust status: ⚠ Untrusted chain\n")
 	}
-	
+
 	if analysis.Summary.SuspiciousCount > 0 {
 		output.WriteString(fmt.Sprintf("  Security issues: ⚠ %d certificates with issues\n", analysis.Summary.SuspiciousCount))
 	} else {
@@ -443,7 +496,7 @@ func formatCertificate(cert CertificateInfo) string {
 		trustIndicator = "⚠"
 	}
 
-	output.WriteString(fmt.Sprintf("  [%d] %s %s Certificate - %s\n", 
+	output.WriteString(fmt.Sprintf("  [%d] %s %s Certificate - %s\n",
 		cert.Position, trustIndicator, cert.Type, cert.Subject))
 
 	// Basic details
@@ -455,18 +508,23 @@ func formatCertificate(cert CertificateInfo) string {
 
 	// Validity period
 	validity := cert.NotAfter.Sub(cert.NotBefore)
-	output.WriteString(fmt.Sprintf("      Valid: %s to %s (%.1f days)\n", 
-		cert.NotBefore.Format("2006-01-02"), 
+	output.WriteString(fmt.Sprintf("      Valid: %s to %s (%.1f days)\n",
+		cert.NotBefore.Format("2006-01-02"),
 		cert.NotAfter.Format("2006-01-02"),
 		validity.Hours()/24))
 
-	// Technical details
-	keyInfo := ""
-	if cert.KeySize > 0 {
-		keyInfo = fmt.Sprintf("%d-bit", cert.KeySize)
+	// Technical details with improved key information
+	var keyDescription string
+	if cert.KeyInfo.Algorithm == "ECDSA" {
+		keyDescription = fmt.Sprintf("%s P-%d (~%d-bit security)", cert.KeyInfo.Algorithm, cert.KeyInfo.Size, cert.KeyInfo.Equivalent)
+	} else if cert.KeyInfo.Size > 0 {
+		keyDescription = fmt.Sprintf("%s %d-bit", cert.KeyInfo.Algorithm, cert.KeyInfo.Size)
+	} else {
+		keyDescription = cert.KeyInfo.Algorithm
 	}
-	output.WriteString(fmt.Sprintf("      Key: %s %s, Serial: %s\n", 
-		keyInfo, cert.SignatureAlg, truncateSerial(cert.SerialNumber)))
+
+	output.WriteString(fmt.Sprintf("      Key: %s, Signature: %s, Serial: %s\n",
+		keyDescription, cert.SignatureAlg, truncateSerial(cert.SerialNumber)))
 
 	// Issues
 	if len(cert.Issues) > 0 {

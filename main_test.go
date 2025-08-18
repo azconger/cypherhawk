@@ -621,13 +621,13 @@ func TestRealisticDPIEnvironments(t *testing.T) {
 			org:    "Palo Alto Networks Inc.",
 			cn:     "Palo Alto Networks Enterprise Root CA",
 			features: DPIFeatures{
-				hasCustomOIDs:     true,
-				weakSignature:     false,
-				suspiciousSerial:  false,
-				recentIssuance:    true,
-				longValidity:      true,
-				corporateDomain:   "paloaltonetworks.com",
-				includesSCT:       false,
+				hasCustomOIDs:    true,
+				weakSignature:    false,
+				suspiciousSerial: false,
+				recentIssuance:   true,
+				longValidity:     true,
+				corporateDomain:  "paloaltonetworks.com",
+				includesSCT:      false,
 			},
 		},
 		{
@@ -636,13 +636,13 @@ func TestRealisticDPIEnvironments(t *testing.T) {
 			org:    "Zscaler Inc.",
 			cn:     "Zscaler Root CA",
 			features: DPIFeatures{
-				hasCustomOIDs:     true,
-				weakSignature:     false,
-				suspiciousSerial:  false,
-				recentIssuance:    true,
-				longValidity:      true,
-				corporateDomain:   "zscaler.com",
-				includesSCT:       false,
+				hasCustomOIDs:    true,
+				weakSignature:    false,
+				suspiciousSerial: false,
+				recentIssuance:   true,
+				longValidity:     true,
+				corporateDomain:  "zscaler.com",
+				includesSCT:      false,
 			},
 		},
 		{
@@ -651,13 +651,13 @@ func TestRealisticDPIEnvironments(t *testing.T) {
 			org:    "Netskope Inc.",
 			cn:     "Netskope Certificate Authority",
 			features: DPIFeatures{
-				hasCustomOIDs:     false,
-				weakSignature:     false,
-				suspiciousSerial:  false,
-				recentIssuance:    true,
-				longValidity:      true,
-				corporateDomain:   "netskope.com",
-				includesSCT:       false,
+				hasCustomOIDs:    false,
+				weakSignature:    false,
+				suspiciousSerial: false,
+				recentIssuance:   true,
+				longValidity:     true,
+				corporateDomain:  "netskope.com",
+				includesSCT:      false,
 			},
 		},
 		{
@@ -666,13 +666,13 @@ func TestRealisticDPIEnvironments(t *testing.T) {
 			org:    "Acme Corporation",
 			cn:     "Acme Corporate Security CA",
 			features: DPIFeatures{
-				hasCustomOIDs:     false,
-				weakSignature:     false,
-				suspiciousSerial:  true,
-				recentIssuance:    true,
-				longValidity:      false,
-				corporateDomain:   "acme.corp",
-				includesSCT:       false,
+				hasCustomOIDs:    false,
+				weakSignature:    false,
+				suspiciousSerial: true,
+				recentIssuance:   true,
+				longValidity:     false,
+				corporateDomain:  "acme.corp",
+				includesSCT:      false,
 			},
 		},
 		{
@@ -681,13 +681,13 @@ func TestRealisticDPIEnvironments(t *testing.T) {
 			org:    "Test Demo Corporation",
 			cn:     "Test-CA-localhost",
 			features: DPIFeatures{
-				hasCustomOIDs:     false,
-				weakSignature:     true,
-				suspiciousSerial:  true,
-				recentIssuance:    true,
-				longValidity:      false,
-				corporateDomain:   "test.local",
-				includesSCT:       false,
+				hasCustomOIDs:    false,
+				weakSignature:    true,
+				suspiciousSerial: true,
+				recentIssuance:   true,
+				longValidity:     false,
+				corporateDomain:  "test.local",
+				includesSCT:      false,
 			},
 		},
 	}
@@ -695,15 +695,15 @@ func TestRealisticDPIEnvironments(t *testing.T) {
 	for _, scenario := range scenarios {
 		t.Run(scenario.name, func(t *testing.T) {
 			t.Logf("Testing %s DPI simulation", scenario.name)
-			
+
 			// Create realistic DPI environment
 			mockCA, mockCAKey := createRealisticDPICA(t, scenario.vendor, scenario.org, scenario.cn, scenario.features)
 			serverCert, serverKey := createServerCert(t, mockCA, mockCAKey)
-			
+
 			// Start mock server
 			server := createMockDPIServerWithCA(t, serverCert, serverKey, mockCA)
 			defer server.Close()
-			
+
 			// Test detection
 			testDPIDetection(t, server.URL, scenario.name, scenario.features.shouldBeDetected())
 		})
@@ -733,7 +733,7 @@ func (f DPIFeatures) shouldBeDetected() bool {
 	}
 	// Recent issuance alone is not suspicious for corporate DPI
 	// Long validity alone is not suspicious for corporate DPI
-	
+
 	// Corporate DPI should only be flagged as malicious if it has multiple red flags
 	return suspiciousCount >= 2
 }
@@ -769,7 +769,7 @@ func TestAdvancedDPITechniques(t *testing.T) {
 			t.Logf("Testing: %s", test.description)
 			server, cleanup := test.setupFunc(t)
 			defer cleanup()
-			
+
 			// Test advanced detection capabilities
 			testAdvancedDetection(t, server.URL, test.name)
 		})
@@ -880,23 +880,23 @@ func testDPIDetection(t *testing.T, serverURL, scenario string, shouldDetect boo
 	// Count only CA-specific suspicious behaviors
 	caSuspiciousCount := 0
 	var caBehaviors []string
-	
+
 	for _, cert := range certs {
 		if cert.IsCA {
 			// Check if this CA is trusted
 			isTrusted := analysis.IsTrustedCA(cert, mozillaCAs, certs)
 			if !isTrusted {
 				t.Logf("Unknown CA detected: %s", cert.Subject.CommonName)
-				
+
 				// Check for CA-specific suspicious behaviors
 				result := security.PerformEnhancedValidation([]*x509.Certificate{cert}, mozillaCAs, serverURL)
 				for _, behavior := range result.SuspiciousBehaviors {
 					// Filter for CA-specific issues (ignore server cert issues)
 					if strings.Contains(behavior, cert.Subject.CommonName) {
 						caBehaviors = append(caBehaviors, behavior)
-						if strings.Contains(behavior, "weak signature") || 
-						   strings.Contains(behavior, "trivial serial") ||
-						   strings.Contains(behavior, "suspicious term") {
+						if strings.Contains(behavior, "weak signature") ||
+							strings.Contains(behavior, "trivial serial") ||
+							strings.Contains(behavior, "suspicious term") {
 							caSuspiciousCount++
 						}
 					}
@@ -1092,7 +1092,7 @@ func createTimingEvasionCA(t *testing.T) (*x509.Certificate, *rsa.PrivateKey) {
 	}
 
 	// Use realistic timing to evade detection
-	issuedDate := time.Now().Add(-90 * 24 * time.Hour) // 3 months ago
+	issuedDate := time.Now().Add(-90 * 24 * time.Hour)     // 3 months ago
 	expiryDate := issuedDate.Add(2 * 365 * 24 * time.Hour) // 2 years validity
 
 	template := x509.Certificate{
@@ -1135,12 +1135,12 @@ func testAdvancedDetection(t *testing.T, serverURL, testName string) {
 	}
 
 	result := security.PerformEnhancedValidation(certs, mozillaCAs, serverURL)
-	
+
 	t.Logf("Advanced detection results for %s:", testName)
 	t.Logf("  Certificates in chain: %d", len(certs))
 	t.Logf("  Suspicious behaviors: %d", len(result.SuspiciousBehaviors))
 	t.Logf("  CT issues: %d", len(result.CTIssues))
-	
+
 	if len(result.SuspiciousBehaviors) > 0 {
 		for _, behavior := range result.SuspiciousBehaviors {
 			t.Logf("    - %s", behavior)

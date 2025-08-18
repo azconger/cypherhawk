@@ -1,5 +1,5 @@
 # CypherHawk - Cross-platform build automation
-.PHONY: build build-all clean test help install dev
+.PHONY: build build-all clean test help install dev fmt fmt-check lint vet check pre-commit
 
 # Build variables
 BINARY_NAME := cypherhawk
@@ -11,10 +11,53 @@ LDFLAGS := -ldflags="-s -w -X main.version=$(VERSION) -X main.buildTime=$(BUILD_
 GOFLAGS := CGO_ENABLED=0
 
 # Default target
-all: build
+all: check build
+
+# Format Go code
+fmt:
+	@echo "Formatting Go code..."
+	@gofmt -s -w .
+	@echo "✅ Code formatted"
+
+# Check if code is formatted (CI-friendly)
+fmt-check:
+	@echo "Checking Go code formatting..."
+	@unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then \
+		echo "❌ The following files are not formatted:"; \
+		echo "$$unformatted"; \
+		echo ""; \
+		echo "Run 'make fmt' to fix formatting issues"; \
+		exit 1; \
+	fi
+	@echo "✅ All files are properly formatted"
+
+# Run go vet
+vet:
+	@echo "Running go vet..."
+	@go vet ./...
+	@echo "✅ go vet passed"
+
+# Run staticcheck (if available)
+lint:
+	@echo "Running staticcheck..."
+	@if command -v staticcheck >/dev/null 2>&1; then \
+		staticcheck ./...; \
+		echo "✅ staticcheck passed"; \
+	else \
+		echo "⚠️  staticcheck not installed, skipping (install with: go install honnef.co/go/tools/cmd/staticcheck@latest)"; \
+	fi
+
+# Comprehensive checks (formatting, vetting, linting)
+check: fmt-check vet lint
+	@echo "✅ All checks passed"
+
+# Pre-commit hook (runs checks + tests)
+pre-commit: check test
+	@echo "✅ Pre-commit checks completed successfully"
 
 # Development build (current platform)
-build:
+build: check
 	@echo "Building CypherHawk $(VERSION) for $(shell go env GOOS)/$(shell go env GOARCH)..."
 	$(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/cypherhawk
 
@@ -43,7 +86,7 @@ install:
 	$(GOFLAGS) go install $(LDFLAGS) ./cmd/cypherhawk
 
 # Cross-platform builds
-build-all: clean
+build-all: check clean
 	@echo "Building CypherHawk $(VERSION) for all platforms..."
 	
 	# Linux builds
@@ -121,15 +164,27 @@ run-url: build
 help:
 	@echo "CypherHawk Build System"
 	@echo ""
-	@echo "Usage:"
-	@echo "  make build       Build for current platform"
-	@echo "  make build-all   Build for all platforms (Linux, macOS, Windows × AMD64, ARM64)"
+	@echo "Code Quality:"
+	@echo "  make fmt         Format Go code with gofmt"
+	@echo "  make fmt-check   Check if code is formatted (CI-friendly)"
+	@echo "  make vet         Run go vet"
+	@echo "  make lint        Run staticcheck (if installed)"
+	@echo "  make check       Run all code quality checks (fmt-check + vet + lint)"
+	@echo "  make pre-commit  Run all checks + tests (recommended before commits)"
+	@echo ""
+	@echo "Build & Test:"
+	@echo "  make build       Build for current platform (includes checks)"
+	@echo "  make build-all   Build for all platforms (includes checks)"
 	@echo "  make test        Run all tests"
 	@echo "  make clean       Clean build artifacts"
 	@echo "  make install     Install locally (go install)"
+	@echo ""
+	@echo "Development:"
 	@echo "  make dev         Build and show version/help"
 	@echo "  make run         Build and run with --verbose"
 	@echo "  make run-url     Build and test against Google"
+	@echo ""
+	@echo "Release:"
 	@echo "  make checksums   Create SHA256 checksums for all binaries"
 	@echo "  make package     Create release packages with checksums"
 	@echo "  make verify      Verify all binaries execute correctly"
@@ -137,3 +192,5 @@ help:
 	@echo ""
 	@echo "Current version: $(VERSION)"
 	@echo "Build time: $(BUILD_TIME)"
+	@echo ""
+	@echo "💡 Tip: Run 'make pre-commit' before pushing to ensure CI will pass"

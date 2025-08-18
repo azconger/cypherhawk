@@ -21,10 +21,10 @@ var (
 )
 
 var (
-	outputFile  = flag.String("o", "", "Output file for CA certificates (use '-' for stdout)")
-	targetURL   = flag.String("url", "", "Custom target URL to test (assumes https:// if no protocol specified)")
-	verbose     = flag.Bool("verbose", false, "Enable verbose output")
-	showVersion = flag.Bool("version", false, "Show version information")
+	outputFile   = flag.String("o", "", "Output file for CA certificates (use '-' for stdout)")
+	targetURL    = flag.String("url", "", "Custom target URL to test (assumes https:// if no protocol specified)")
+	verbose      = flag.Bool("verbose", false, "Enable verbose output")
+	showVersion  = flag.Bool("version", false, "Show version information")
 	analyzeChain = flag.Bool("analyze", false, "Show detailed certificate chain analysis")
 )
 
@@ -42,7 +42,7 @@ func normalizeURL(url string) string {
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
 		return url
 	}
-	
+
 	// Add https:// prefix by default
 	return "https://" + url
 }
@@ -142,9 +142,15 @@ func main() {
 
 	if len(unknownCerts) == 0 {
 		// Always show success message (not just in verbose mode)
-		fmt.Fprintf(os.Stderr, "✓ No corporate DPI detected (tested %d endpoint%s)\n", 
-			successCount, 
-			func() string { if successCount == 1 { return "" } else { return "s" } }())
+		fmt.Fprintf(os.Stderr, "✓ No corporate DPI detected (tested %d endpoint%s)\n",
+			successCount,
+			func() string {
+				if successCount == 1 {
+					return ""
+				} else {
+					return "s"
+				}
+			}())
 		os.Exit(0)
 	}
 
@@ -152,9 +158,15 @@ func main() {
 	pemOutput := output.GeneratePEM(unknownCerts)
 
 	// Show detection summary
-	fmt.Fprintf(os.Stderr, "⚠ Corporate DPI detected: found %d unknown CA certificate%s\n", 
+	fmt.Fprintf(os.Stderr, "⚠ Corporate DPI detected: found %d unknown CA certificate%s\n",
 		len(unknownCerts),
-		func() string { if len(unknownCerts) == 1 { return "" } else { return "s" } }())
+		func() string {
+			if len(unknownCerts) == 1 {
+				return ""
+			} else {
+				return "s"
+			}
+		}())
 
 	if *outputFile == "" || *outputFile == "-" {
 		fmt.Print(pemOutput)
