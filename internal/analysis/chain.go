@@ -12,12 +12,13 @@ import (
 
 // ChainAnalysis provides detailed analysis of a certificate chain
 type ChainAnalysis struct {
-	Endpoint     string
-	Certificates []CertificateInfo
-	Summary      ChainSummary
-	DPIClues     []string
-	MitMClues    []string
-	Anomalies    []string
+	Endpoint           string
+	Certificates       []CertificateInfo
+	Summary            ChainSummary
+	DPIClues           []string
+	MitMClues          []string
+	Anomalies          []string
+	TrustDiscrepancies []TrustDiscrepancy
 }
 
 // CertificateInfo contains details about a single certificate
@@ -84,6 +85,9 @@ func AnalyzeCertificateChain(endpoint string, certs []*x509.Certificate, mozilla
 	analysis.MitMClues = detectMitMClues(certs, endpoint)
 	analysis.Anomalies = detectChainAnomalies(certs)
 
+	// Compare trust stores (OS vs Mozilla)
+	analysis.TrustDiscrepancies = CompareTrustStores(certs, mozillaCAs, endpoint)
+
 	return analysis
 }
 
@@ -104,7 +108,7 @@ func analyzeCertificate(cert *x509.Certificate, position int, chain []*x509.Cert
 	if position == 1 {
 		info.Type = "Leaf"
 	} else if cert.IsCA {
-		if isSelfSigned(cert) {
+		if isRootCertificate(cert, position, len(chain)) {
 			info.Type = "Root"
 		} else {
 			info.Type = "Intermediate"
@@ -116,8 +120,9 @@ func analyzeCertificate(cert *x509.Certificate, position int, chain []*x509.Cert
 	// Get key information
 	info.KeyInfo = getKeyInfo(cert)
 
-	// Check if trusted
-	info.IsTrusted = IsTrustedCA(cert, mozillaCAs, chain)
+	// Check if trusted - for display purposes, base this on the overall chain trust
+	// Individual intermediate CAs don't need to be independently trusted
+	info.IsTrusted = hasValidTrustPath(chain, mozillaCAs)
 
 	// Detect issues
 	info.Issues = detectCertificateIssues(cert, chain)
@@ -362,6 +367,32 @@ func isSelfSigned(cert *x509.Certificate) bool {
 	return cert.Subject.String() == cert.Issuer.String()
 }
 
+// isRootCertificate determines if a certificate is a root certificate using multiple heuristics
+func isRootCertificate(cert *x509.Certificate, position int, chainLength int) bool {
+	// 1. Traditional self-signed check
+	if isSelfSigned(cert) {
+		return true
+	}
+
+	// 2. If it's the last certificate in the chain and has no issuer name, likely a root
+	if position == chainLength && cert.Issuer.CommonName == "" {
+		return true
+	}
+
+	// 3. If it's the last certificate in the chain and the issuer doesn't match any other cert in chain
+	// (This handles cross-signed roots where Subject != Issuer but it's still functionally a root)
+	if position == chainLength {
+		return true
+	}
+
+	// 4. Check if the certificate can verify itself (cryptographic self-signature)
+	if cert.CheckSignatureFrom(cert) == nil {
+		return true
+	}
+
+	return false
+}
+
 func isSignedBy(child, parent *x509.Certificate) bool {
 	return child.CheckSignatureFrom(parent) == nil
 }
@@ -441,15 +472,15 @@ func (analysis *ChainAnalysis) DisplayChainAnalysis() string {
 		analysis.Summary.LeafCerts, analysis.Summary.Intermediate, analysis.Summary.RootCerts))
 
 	if analysis.Summary.TrustedChain {
-		output.WriteString("  Trust status: ✓ Trusted chain\n")
+		output.WriteString("  Trust status: [OK] Trusted chain\n")
 	} else {
-		output.WriteString("  Trust status: ⚠ Untrusted chain\n")
+		output.WriteString("  Trust status: [!] Untrusted chain\n")
 	}
 
 	if analysis.Summary.SuspiciousCount > 0 {
-		output.WriteString(fmt.Sprintf("  Security issues: ⚠ %d certificates with issues\n", analysis.Summary.SuspiciousCount))
+		output.WriteString(fmt.Sprintf("  Security issues: [!] %d certificates with issues\n", analysis.Summary.SuspiciousCount))
 	} else {
-		output.WriteString("  Security issues: ✓ No major issues detected\n")
+		output.WriteString("  Security issues: [OK] No major issues detected\n")
 	}
 	output.WriteString("\n")
 
@@ -463,7 +494,7 @@ func (analysis *ChainAnalysis) DisplayChainAnalysis() string {
 	if len(analysis.DPIClues) > 0 {
 		output.WriteString("\nCorporate DPI Indicators:\n")
 		for _, clue := range analysis.DPIClues {
-			output.WriteString(fmt.Sprintf("  🔍 %s\n", clue))
+			output.WriteString(fmt.Sprintf("  [DPI] %s\n", clue))
 		}
 	}
 
@@ -471,7 +502,7 @@ func (analysis *ChainAnalysis) DisplayChainAnalysis() string {
 	if len(analysis.MitMClues) > 0 {
 		output.WriteString("\nMalicious MitM Indicators:\n")
 		for _, clue := range analysis.MitMClues {
-			output.WriteString(fmt.Sprintf("  🚨 %s\n", clue))
+			output.WriteString(fmt.Sprintf("  [ALERT] %s\n", clue))
 		}
 	}
 
@@ -479,7 +510,26 @@ func (analysis *ChainAnalysis) DisplayChainAnalysis() string {
 	if len(analysis.Anomalies) > 0 {
 		output.WriteString("\nChain Anomalies:\n")
 		for _, anomaly := range analysis.Anomalies {
-			output.WriteString(fmt.Sprintf("  ⚠ %s\n", anomaly))
+			output.WriteString(fmt.Sprintf("  [!] %s\n", anomaly))
+		}
+	}
+
+	// Trust Store Discrepancies (the key diagnostic information)
+	if len(analysis.TrustDiscrepancies) > 0 {
+		output.WriteString("\nTrust Store Analysis:\n")
+		for _, discrepancy := range analysis.TrustDiscrepancies {
+			osStatus := "[NO]"
+			if discrepancy.TrustedByOS {
+				osStatus = "[YES]"
+			}
+			mozillaStatus := "[NO]"
+			if discrepancy.TrustedByMozilla {
+				mozillaStatus = "[YES]"
+			}
+
+			output.WriteString(fmt.Sprintf("  [CERT] %s\n", discrepancy.Certificate.Subject.CommonName))
+			output.WriteString(fmt.Sprintf("         OS Trust Store: %s  |  Mozilla Trust Store: %s\n", osStatus, mozillaStatus))
+			output.WriteString(fmt.Sprintf("         Note: %s\n", discrepancy.Explanation))
 		}
 	}
 
@@ -491,9 +541,9 @@ func formatCertificate(cert CertificateInfo) string {
 	var output strings.Builder
 
 	// Certificate header with type and trust status
-	trustIndicator := "✓"
+	trustIndicator := "[OK]"
 	if !cert.IsTrusted {
-		trustIndicator = "⚠"
+		trustIndicator = "[!]"
 	}
 
 	output.WriteString(fmt.Sprintf("  [%d] %s %s Certificate - %s\n",

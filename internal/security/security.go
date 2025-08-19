@@ -176,9 +176,13 @@ func PerformEnhancedValidation(certs []*x509.Certificate, mozillaCAs *x509.CertP
 	behavioralIssues := DetectSuspiciousBehavior(certs, hostname)
 	result.SuspiciousBehaviors = append(result.SuspiciousBehaviors, behavioralIssues...)
 
-	// 4. Enhanced CA impersonation detection (already integrated in analysis.IsPotentialDPICA)
+	// 4. OS vs Mozilla trust store comparison
+	trustDiscrepancies := analysis.CompareTrustStores(certs, mozillaCAs, hostname)
+	result.TrustDiscrepancies = trustDiscrepancies
 
-	// 5. Risk scoring - if we have multiple suspicious indicators, increase confidence
+	// 5. Enhanced CA impersonation detection (already integrated in analysis.IsPotentialDPICA)
+
+	// 6. Risk scoring - if we have multiple suspicious indicators, increase confidence
 	riskScore := len(result.SuspiciousBehaviors)
 	if riskScore >= 3 {
 		result.SuspiciousBehaviors = append(result.SuspiciousBehaviors,

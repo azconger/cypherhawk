@@ -12,6 +12,15 @@ type SecurityValidationResult struct {
 	SuspiciousBehaviors  []string
 	CTIssues             []string
 	ChainValidationError error
+	TrustDiscrepancies   []TrustDiscrepancy
+}
+
+// TrustDiscrepancy represents differences between OS and Mozilla certificate trust
+type TrustDiscrepancy struct {
+	Certificate      *x509.Certificate
+	TrustedByOS      bool
+	TrustedByMozilla bool
+	Explanation      string
 }
 
 // ValidateChain validates the complete certificate chain like a browser would
@@ -265,4 +274,81 @@ func isLegitimateCAImpersonation(cert *x509.Certificate) bool {
 	}
 
 	return false
+}
+
+// CompareTrustStores compares certificate trust between OS and Mozilla certificate stores
+func CompareTrustStores(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostname string) []TrustDiscrepancy {
+	var discrepancies []TrustDiscrepancy
+
+	// Get OS certificate store (may return nil on some platforms)
+	osCAs, err := x509.SystemCertPool()
+	if err != nil {
+		// Some platforms don't support SystemCertPool, continue with Mozilla-only validation
+		return discrepancies
+	}
+
+	if osCAs == nil {
+		// SystemCertPool not available on this platform
+		return discrepancies
+	}
+
+	// Test the complete certificate chain validation (leaf cert through full chain)
+	// This is how browsers and applications actually validate certificates
+	if len(certs) == 0 {
+		return discrepancies
+	}
+
+	leafCert := certs[0] // First certificate should be the leaf
+
+	// Build intermediate certificate pool from the remaining certificates
+	intermediates := x509.NewCertPool()
+	for i := 1; i < len(certs); i++ {
+		intermediates.AddCert(certs[i])
+	}
+
+	// Test against Mozilla CA bundle
+	mozillaOpts := x509.VerifyOptions{
+		Roots:         mozillaCAs,
+		Intermediates: intermediates,
+		DNSName:       extractHostname(hostname),
+	}
+	_, mozillaErr := leafCert.Verify(mozillaOpts)
+	trustedByMozilla := mozillaErr == nil
+
+	// Test against OS certificate store
+	osOpts := x509.VerifyOptions{
+		Roots:         osCAs,
+		Intermediates: intermediates,
+		DNSName:       extractHostname(hostname),
+	}
+	_, osErr := leafCert.Verify(osOpts)
+	trustedByOS := osErr == nil
+
+	// Look for interesting discrepancies in chain validation
+	if trustedByOS != trustedByMozilla {
+		// Find which root CA is being used (if any)
+		var relevantCA *x509.Certificate
+		if len(certs) > 1 {
+			// Use the last certificate in chain (typically the root or highest intermediate)
+			relevantCA = certs[len(certs)-1]
+		} else {
+			relevantCA = leafCert
+		}
+
+		discrepancy := TrustDiscrepancy{
+			Certificate:      relevantCA,
+			TrustedByOS:      trustedByOS,
+			TrustedByMozilla: trustedByMozilla,
+		}
+
+		if trustedByOS && !trustedByMozilla {
+			discrepancy.Explanation = "OS trusts this certificate chain (Postman/browsers work) but Mozilla doesn't (Java apps fail)"
+		} else if !trustedByOS && trustedByMozilla {
+			discrepancy.Explanation = "Mozilla trusts this certificate chain but OS doesn't (unusual configuration)"
+		}
+
+		discrepancies = append(discrepancies, discrepancy)
+	}
+
+	return discrepancies
 }

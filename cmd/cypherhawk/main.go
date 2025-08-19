@@ -117,6 +117,25 @@ func main() {
 			}
 		}
 
+		// Report trust discrepancies if verbose (key diagnostic info for support)
+		if *verbose && len(securityIssues.TrustDiscrepancies) > 0 {
+			fmt.Fprintf(os.Stderr, "Trust store analysis for %s:\n", endpoint)
+			for _, discrepancy := range securityIssues.TrustDiscrepancies {
+				osStatus := "Not Trusted"
+				if discrepancy.TrustedByOS {
+					osStatus = "Trusted"
+				}
+				mozillaStatus := "Not Trusted"
+				if discrepancy.TrustedByMozilla {
+					mozillaStatus = "Trusted"
+				}
+
+				fmt.Fprintf(os.Stderr, "  [CERT] %s: OS=%s, Mozilla=%s\n",
+					discrepancy.Certificate.Subject.CommonName, osStatus, mozillaStatus)
+				fmt.Fprintf(os.Stderr, "         Note: %s\n", discrepancy.Explanation)
+			}
+		}
+
 		// Add untrusted CAs to results
 		for _, cert := range securityIssues.UntrustedCAs {
 			// Check if we already have this certificate (deduplication)
@@ -142,7 +161,7 @@ func main() {
 
 	if len(unknownCerts) == 0 {
 		// Always show success message (not just in verbose mode)
-		fmt.Fprintf(os.Stderr, "✓ No corporate DPI detected (tested %d endpoint%s)\n",
+		fmt.Fprintf(os.Stderr, "[OK] No corporate DPI detected (tested %d endpoint%s)\n",
 			successCount,
 			func() string {
 				if successCount == 1 {
@@ -158,7 +177,7 @@ func main() {
 	pemOutput := output.GeneratePEM(unknownCerts)
 
 	// Show detection summary
-	fmt.Fprintf(os.Stderr, "⚠ Corporate DPI detected: found %d unknown CA certificate%s\n",
+	fmt.Fprintf(os.Stderr, "[!] Corporate DPI detected: found %d unknown CA certificate%s\n",
 		len(unknownCerts),
 		func() string {
 			if len(unknownCerts) == 1 {
