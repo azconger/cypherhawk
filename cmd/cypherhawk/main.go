@@ -4,7 +4,9 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/kaakaww/cypherhawk/internal/analysis"
@@ -43,15 +45,132 @@ var defaultEndpoints = []string{
 	"https://s3.us-west-2.amazonaws.com",
 }
 
+// validateAndNormalizeURL validates the input URL and normalizes it
+func validateAndNormalizeURL(inputURL string) (string, error) {
+	if inputURL == "" {
+		return "", fmt.Errorf("URL cannot be empty")
+	}
+	
+	// Remove whitespace
+	inputURL = strings.TrimSpace(inputURL)
+	
+	// Check for common invalid characters that could indicate malicious input
+	if strings.ContainsAny(inputURL, "\r\n\t") {
+		return "", fmt.Errorf("URL contains invalid control characters")
+	}
+	
+	// First parse the input URL to check for unsupported schemes
+	tempURL, tempErr := url.Parse(inputURL)
+	if tempErr == nil && tempURL.Scheme != "" && tempURL.Scheme != "http" && tempURL.Scheme != "https" {
+		return "", fmt.Errorf("unsupported URL scheme '%s', only http and https are supported\n"+
+			"Corporate network guidance:\n"+
+			"  - Use https:// for secure connections (recommended)\n"+
+			"  - Use http:// only if the service doesn't support HTTPS\n"+
+			"  - Most corporate environments prefer HTTPS connections", tempURL.Scheme)
+	}
+	
+	// Normalize the URL by adding https:// if no protocol is specified
+	normalized := normalizeURL(inputURL)
+	
+	// Parse and validate the normalized URL
+	parsedURL, err := url.Parse(normalized)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL format: %v\n"+
+			"Corporate network guidance:\n"+
+			"  - Ensure the URL format is correct (e.g., example.com or https://example.com)\n"+
+			"  - For internal URLs, verify the hostname is correct\n"+
+			"  - Check if the URL requires specific domain suffixes in your environment", err)
+	}
+	
+	// Validate scheme
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return "", fmt.Errorf("unsupported URL scheme '%s', only http and https are supported\n"+
+			"Corporate network guidance:\n"+
+			"  - Use https:// for secure connections (recommended)\n"+
+			"  - Use http:// only if the service doesn't support HTTPS\n"+
+			"  - Most corporate environments prefer HTTPS connections", parsedURL.Scheme)
+	}
+	
+	// Validate hostname
+	if parsedURL.Hostname() == "" {
+		return "", fmt.Errorf("URL must contain a valid hostname\n"+
+			"Corporate network guidance:\n"+
+			"  - Provide a complete hostname (e.g., internal.company.com)\n"+
+			"  - For internal services, ensure you're connected to the corporate network\n"+
+			"  - Check if the hostname requires VPN access")
+	}
+	
+	// Check for suspicious patterns that might indicate malicious URLs
+	hostname := parsedURL.Hostname()
+	
+	// Check for IP addresses (not necessarily invalid, but warn in corporate context)
+	ipRegex := regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$`)
+	if ipRegex.MatchString(hostname) {
+		// Don't block IP addresses, but they're less common in corporate environments
+		// Could add warning in verbose mode if needed
+	}
+	
+	// Check for localhost/internal addresses that might not be reachable
+	if isInternalAddress(hostname) {
+		// This is fine, but provide guidance if connection fails
+	}
+	
+	// Validate port if specified
+	if parsedURL.Port() != "" {
+		port := parsedURL.Port()
+		// Basic port validation - ensure it's numeric
+		portRegex := regexp.MustCompile(`^\d{1,5}$`)
+		if !portRegex.MatchString(port) {
+			return "", fmt.Errorf("invalid port number '%s'\n"+
+				"Corporate network guidance:\n"+
+				"  - Port must be a number between 1-65535\n"+
+				"  - Common ports: 80 (HTTP), 443 (HTTPS), 8080, 8443\n"+
+				"  - Check if custom ports are allowed by corporate firewall", port)
+		}
+	}
+	
+	return normalized, nil
+}
+
 // normalizeURL ensures the URL has a protocol prefix, defaulting to https://
-func normalizeURL(url string) string {
+func normalizeURL(inputURL string) string {
 	// If the URL already has a protocol, return as-is
-	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
-		return url
+	if strings.HasPrefix(inputURL, "http://") || strings.HasPrefix(inputURL, "https://") {
+		return inputURL
 	}
 
 	// Add https:// prefix by default
-	return "https://" + url
+	return "https://" + inputURL
+}
+
+// isInternalAddress checks if the hostname appears to be an internal/private address
+func isInternalAddress(hostname string) bool {
+	// Check for common internal patterns
+	internalPatterns := []string{
+		"localhost",
+		"127.0.0.1",
+		".local",
+		".internal",
+		".corp",
+		".corporate",
+		".intranet",
+	}
+	
+	lowerHost := strings.ToLower(hostname)
+	for _, pattern := range internalPatterns {
+		if strings.Contains(lowerHost, pattern) {
+			return true
+		}
+	}
+	
+	// Check for private IP ranges (basic check)
+	if strings.HasPrefix(hostname, "10.") ||
+		strings.HasPrefix(hostname, "192.168.") ||
+		strings.HasPrefix(hostname, "172.") {
+		return true
+	}
+	
+	return false
 }
 
 // Helper functions for flag handling
@@ -119,8 +238,15 @@ func main() {
 	// Step 2: Determine endpoints to test
 	endpoints := defaultEndpoints
 	if *targetURL != "" {
-		normalizedURL := normalizeURL(*targetURL)
-		endpoints = []string{normalizedURL}
+		validatedURL, err := validateAndNormalizeURL(*targetURL)
+		if err != nil {
+			printError("Invalid URL '%s': %v\n", *targetURL, err)
+			os.Exit(2)
+		}
+		endpoints = []string{validatedURL}
+		if isVerbose() {
+			printInfo("Using custom target: %s\n", validatedURL)
+		}
 	}
 
 	// Step 3: Test endpoints and collect unknown certificates
