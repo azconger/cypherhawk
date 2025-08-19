@@ -11,6 +11,7 @@ import (
 
 	"github.com/kaakaww/cypherhawk/internal/analysis"
 	"github.com/kaakaww/cypherhawk/internal/bundle"
+	"github.com/kaakaww/cypherhawk/internal/detection"
 	"github.com/kaakaww/cypherhawk/internal/network"
 	"github.com/kaakaww/cypherhawk/internal/output"
 	"github.com/kaakaww/cypherhawk/internal/security"
@@ -50,15 +51,15 @@ func validateAndNormalizeURL(inputURL string) (string, error) {
 	if inputURL == "" {
 		return "", fmt.Errorf("URL cannot be empty")
 	}
-	
+
 	// Remove whitespace
 	inputURL = strings.TrimSpace(inputURL)
-	
+
 	// Check for common invalid characters that could indicate malicious input
 	if strings.ContainsAny(inputURL, "\r\n\t") {
 		return "", fmt.Errorf("URL contains invalid control characters")
 	}
-	
+
 	// First parse the input URL to check for unsupported schemes
 	tempURL, tempErr := url.Parse(inputURL)
 	if tempErr == nil && tempURL.Scheme != "" && tempURL.Scheme != "http" && tempURL.Scheme != "https" {
@@ -68,10 +69,10 @@ func validateAndNormalizeURL(inputURL string) (string, error) {
 			"  - Use http:// only if the service doesn't support HTTPS\n"+
 			"  - Most corporate environments prefer HTTPS connections", tempURL.Scheme)
 	}
-	
+
 	// Normalize the URL by adding https:// if no protocol is specified
 	normalized := normalizeURL(inputURL)
-	
+
 	// Parse and validate the normalized URL
 	parsedURL, err := url.Parse(normalized)
 	if err != nil {
@@ -81,7 +82,7 @@ func validateAndNormalizeURL(inputURL string) (string, error) {
 			"  - For internal URLs, verify the hostname is correct\n"+
 			"  - Check if the URL requires specific domain suffixes in your environment", err)
 	}
-	
+
 	// Validate scheme
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
 		return "", fmt.Errorf("unsupported URL scheme '%s', only http and https are supported\n"+
@@ -90,31 +91,31 @@ func validateAndNormalizeURL(inputURL string) (string, error) {
 			"  - Use http:// only if the service doesn't support HTTPS\n"+
 			"  - Most corporate environments prefer HTTPS connections", parsedURL.Scheme)
 	}
-	
+
 	// Validate hostname
 	if parsedURL.Hostname() == "" {
-		return "", fmt.Errorf("URL must contain a valid hostname\n"+
-			"Corporate network guidance:\n"+
-			"  - Provide a complete hostname (e.g., internal.company.com)\n"+
-			"  - For internal services, ensure you're connected to the corporate network\n"+
+		return "", fmt.Errorf("URL must contain a valid hostname\n" +
+			"Corporate network guidance:\n" +
+			"  - Provide a complete hostname (e.g., internal.company.com)\n" +
+			"  - For internal services, ensure you're connected to the corporate network\n" +
 			"  - Check if the hostname requires VPN access")
 	}
-	
+
 	// Check for suspicious patterns that might indicate malicious URLs
 	hostname := parsedURL.Hostname()
-	
+
 	// Check for IP addresses (not necessarily invalid, but warn in corporate context)
 	ipRegex := regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$`)
 	if ipRegex.MatchString(hostname) {
 		// Don't block IP addresses, but they're less common in corporate environments
 		// Could add warning in verbose mode if needed
 	}
-	
+
 	// Check for localhost/internal addresses that might not be reachable
 	if isInternalAddress(hostname) {
 		// This is fine, but provide guidance if connection fails
 	}
-	
+
 	// Validate port if specified
 	if parsedURL.Port() != "" {
 		port := parsedURL.Port()
@@ -128,7 +129,7 @@ func validateAndNormalizeURL(inputURL string) (string, error) {
 				"  - Check if custom ports are allowed by corporate firewall", port)
 		}
 	}
-	
+
 	return normalized, nil
 }
 
@@ -155,22 +156,82 @@ func isInternalAddress(hostname string) bool {
 		".corporate",
 		".intranet",
 	}
-	
+
 	lowerHost := strings.ToLower(hostname)
 	for _, pattern := range internalPatterns {
 		if strings.Contains(lowerHost, pattern) {
 			return true
 		}
 	}
-	
+
 	// Check for private IP ranges (basic check)
 	if strings.HasPrefix(hostname, "10.") ||
 		strings.HasPrefix(hostname, "192.168.") ||
 		strings.HasPrefix(hostname, "172.") {
 		return true
 	}
-	
+
 	return false
+}
+
+// generateDPISummary creates a comprehensive summary of DPI detection results
+func generateDPISummary(results []*detection.DetectionResult) string {
+	var totalUnknownCAs int
+	var detectedVendors = make(map[string]*detection.VendorMatch)
+	var hasHighConfidenceDetection bool
+	
+	// Analyze all results
+	for _, result := range results {
+		totalUnknownCAs += len(result.UnknownCAs)
+		
+		if result.BestMatch != nil {
+			// Keep the highest confidence match for each vendor
+			vendor := result.BestMatch.Vendor
+			if existing, exists := detectedVendors[vendor]; !exists || result.BestMatch.Confidence > existing.Confidence {
+				detectedVendors[vendor] = result.BestMatch
+			}
+			
+			if result.BestMatch.Confidence >= 70 {
+				hasHighConfidenceDetection = true
+			}
+		}
+	}
+	
+	// Generate summary message
+	if len(detectedVendors) == 0 {
+		return fmt.Sprintf("[DPI] Corporate DPI detected: found %d unknown CA certificate(s)", totalUnknownCAs)
+	}
+	
+	// Single vendor detected
+	if len(detectedVendors) == 1 {
+		for _, vendor := range detectedVendors {
+			confidenceText := ""
+			if hasHighConfidenceDetection {
+				confidenceText = fmt.Sprintf(" (%d%% confidence)", vendor.Confidence)
+			}
+			
+			return fmt.Sprintf("[DPI] %s detected%s - %d CA certificate(s) need extraction", 
+				vendor.Vendor, confidenceText, totalUnknownCAs)
+		}
+	}
+	
+	// Multiple vendors detected
+	var vendorNames []string
+	for _, vendor := range detectedVendors {
+		if vendor.Confidence >= 50 { // Only include moderate+ confidence
+			vendorNames = append(vendorNames, vendor.Vendor)
+		}
+	}
+	
+	if len(vendorNames) == 0 {
+		return fmt.Sprintf("[DPI] Unknown DPI vendor detected - %d CA certificate(s) need extraction", totalUnknownCAs)
+	} else if len(vendorNames) == 1 {
+		return fmt.Sprintf("[DPI] %s detected - %d CA certificate(s) need extraction", 
+			vendorNames[0], totalUnknownCAs)
+	} else {
+		return fmt.Sprintf("[DPI] Multiple DPI vendors detected (%s) - %d CA certificate(s) need extraction", 
+			strings.Join(vendorNames, ", "), totalUnknownCAs)
+	}
 }
 
 // Helper functions for flag handling
@@ -251,6 +312,7 @@ func main() {
 
 	// Step 3: Test endpoints and collect unknown certificates
 	var unknownCerts []*x509.Certificate
+	var dpiResults []*detection.DetectionResult
 	successCount := 0
 
 	for i, endpoint := range endpoints {
@@ -278,6 +340,15 @@ func main() {
 
 		// Enhanced security validation with multiple techniques
 		securityIssues := security.PerformEnhancedValidation(certs, mozillaCAs, endpoint)
+
+		// Enhanced DPI vendor detection
+		dpiResult := detection.AnalyzeCertificateChain(endpoint, certs, mozillaCAs)
+		dpiResults = append(dpiResults, dpiResult)
+
+		// Report DPI detection results if verbose
+		if isVerbose() && dpiResult.IsCorporateDPI {
+			printInfo("%s", dpiResult.FormatDetectionReport())
+		}
 
 		// Report security issues if verbose
 		if isVerbose() && len(securityIssues.SuspiciousBehaviors) > 0 {
@@ -329,6 +400,7 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Generate summary message from DPI detection results
 	if len(unknownCerts) == 0 {
 		// Always show success message to stdout (unless quiet/silent)
 		printInfo("[OK] No corporate DPI detected (tested %d endpoint%s)\n",
@@ -343,16 +415,9 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Show detection summary to stdout (unless quiet/silent)
-	printInfo("[!] Corporate DPI detected: found %d unknown CA certificate%s\n",
-		len(unknownCerts),
-		func() string {
-			if len(unknownCerts) == 1 {
-				return ""
-			} else {
-				return "s"
-			}
-		}())
+	// Generate enhanced DPI detection summary
+	dpiSummary := generateDPISummary(dpiResults)
+	printInfo("%s\n", dpiSummary)
 
 	// Handle PEM output based on -o/-outfile flag
 	outputFile := getOutputFile()

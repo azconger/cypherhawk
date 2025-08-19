@@ -137,7 +137,7 @@ func abs(x int) int {
 // createHTTPClient creates an HTTP client with corporate proxy support
 func createHTTPClient() *http.Client {
 	transport := &http.Transport{}
-	
+
 	// Configure proxy from environment variables
 	if err := configureProxyForTransport(transport); err != nil {
 		// Log error but continue - proxy configuration is optional
@@ -156,7 +156,7 @@ func createHTTPClient() *http.Client {
 // enhanceBundleDownloadError provides helpful error messages for CA bundle download failures
 func enhanceBundleDownloadError(err error, source Source) error {
 	errStr := err.Error()
-	
+
 	// DNS resolution failures
 	if _, ok := err.(*net.DNSError); ok {
 		return fmt.Errorf("failed to download CA bundle from %s: DNS resolution failed for %s\n"+
@@ -167,7 +167,7 @@ func enhanceBundleDownloadError(err error, source Source) error {
 			"  - Consider using embedded CA bundle backup if available",
 			source.Name, source.URL, source.Description)
 	}
-	
+
 	// Connection timeout
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		return fmt.Errorf("failed to download CA bundle from %s: connection timeout\n"+
@@ -178,7 +178,7 @@ func enhanceBundleDownloadError(err error, source Source) error {
 			"  - CA bundle download is required for certificate validation",
 			source.Name, source.URL)
 	}
-	
+
 	// Proxy-related errors
 	if strings.Contains(errStr, "proxy") || strings.Contains(errStr, "407") {
 		httpProxy := os.Getenv("HTTP_PROXY")
@@ -189,23 +189,23 @@ func enhanceBundleDownloadError(err error, source Source) error {
 		if httpsProxy == "" {
 			httpsProxy = os.Getenv("https_proxy")
 		}
-		
+
 		guidance := fmt.Sprintf("failed to download CA bundle from %s: proxy error\n"+
 			"Corporate proxy guidance:\n"+
 			"  - Your corporate proxy might require authentication for %s\n"+
 			"  - Try configuring proxy with credentials: http://user:pass@proxy.corp.com:8080\n"+
 			"  - Contact IT support for correct proxy settings\n", source.Name, source.URL)
-		
+
 		if httpProxy != "" || httpsProxy != "" {
 			guidance += fmt.Sprintf("  - Current proxy settings: HTTP_PROXY=%s, HTTPS_PROXY=%s\n", httpProxy, httpsProxy)
 		} else {
 			guidance += "  - No proxy environment variables detected\n" +
 				"  - Set HTTP_PROXY and/or HTTPS_PROXY environment variables\n"
 		}
-		
+
 		return fmt.Errorf("%s\nOriginal error: %v", guidance, err)
 	}
-	
+
 	// Generic network error
 	return fmt.Errorf("failed to download CA bundle from %s: %v\n"+
 		"Corporate network guidance:\n"+
@@ -220,27 +220,27 @@ func enhanceBundleDownloadError(err error, source Source) error {
 func loadEmbeddedBundle() (*x509.CertPool, string, error) {
 	pemData := embedded.GetEmbeddedCACerts()
 	if len(pemData) == 0 {
-		return nil, "", fmt.Errorf("embedded CA bundle is empty or missing\n"+
-			"Corporate network guidance:\n"+
-			"  - All external CA sources are blocked by corporate firewall\n"+
-			"  - Embedded backup CA bundle is missing or corrupted\n"+
-			"  - Contact IT support to allow access to certificate authority sources\n"+
+		return nil, "", fmt.Errorf("embedded CA bundle is empty or missing\n" +
+			"Corporate network guidance:\n" +
+			"  - All external CA sources are blocked by corporate firewall\n" +
+			"  - Embedded backup CA bundle is missing or corrupted\n" +
+			"  - Contact IT support to allow access to certificate authority sources\n" +
 			"  - Consider using corporate CA bundle if available")
 	}
-	
+
 	certPool := x509.NewCertPool()
 	if !certPool.AppendCertsFromPEM(pemData) {
-		return nil, "", fmt.Errorf("failed to parse embedded CA bundle\n"+
-			"Corporate network guidance:\n"+
-			"  - Embedded CA bundle appears to be corrupted\n"+
-			"  - This is likely a build-time issue\n"+
+		return nil, "", fmt.Errorf("failed to parse embedded CA bundle\n" +
+			"Corporate network guidance:\n" +
+			"  - Embedded CA bundle appears to be corrupted\n" +
+			"  - This is likely a build-time issue\n" +
 			"  - Please report this issue or rebuild from source")
 	}
-	
+
 	// Note: Subjects() is deprecated, but we only use it for validation
 	bundleSize := len(certPool.Subjects()) //nolint:SA1019
 	info := fmt.Sprintf("embedded backup bundle (%d CAs) - external sources blocked", bundleSize)
-	
+
 	return certPool, info, nil
 }
 
@@ -248,50 +248,50 @@ func loadEmbeddedBundle() (*x509.CertPool, string, error) {
 func downloadWithRetry(client *http.Client, source Source) (*http.Response, error) {
 	const maxRetries = 3
 	const baseDelay = 2 * time.Second
-	
+
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		resp, err := client.Get(source.URL)
 		if err == nil {
 			return resp, nil
 		}
-		
+
 		// Don't retry for certain errors
 		if isBundleNonRetryableError(err) {
 			return nil, err
 		}
-		
+
 		// If this was the last attempt, return the error
 		if attempt == maxRetries {
 			return nil, fmt.Errorf("failed after %d attempts: %v", maxRetries, err)
 		}
-		
+
 		// Wait before retrying with exponential backoff
 		delay := time.Duration(attempt) * baseDelay
 		time.Sleep(delay)
 	}
-	
+
 	return nil, fmt.Errorf("unexpected error in retry logic")
 }
 
 // isBundleNonRetryableError checks if a bundle download error should not be retried
 func isBundleNonRetryableError(err error) bool {
 	errStr := err.Error()
-	
+
 	// Don't retry DNS resolution errors
 	if _, ok := err.(*net.DNSError); ok {
 		return true
 	}
-	
+
 	// Don't retry proxy authentication errors
 	if strings.Contains(errStr, "407") {
 		return true
 	}
-	
+
 	// Don't retry connection refused
 	if strings.Contains(errStr, "connection refused") {
 		return true
 	}
-	
+
 	// Retry timeouts and temporary network errors
 	return false
 }
@@ -301,7 +301,7 @@ func configureProxyForTransport(transport *http.Transport) error {
 	// Check for HTTP_PROXY and HTTPS_PROXY environment variables
 	httpProxy := os.Getenv("HTTP_PROXY")
 	httpsProxy := os.Getenv("HTTPS_PROXY")
-	
+
 	// Also check lowercase versions (common in Unix environments)
 	if httpProxy == "" {
 		httpProxy = os.Getenv("http_proxy")
@@ -318,7 +318,7 @@ func configureProxyForTransport(transport *http.Transport) error {
 	// Create proxy function
 	transport.Proxy = func(req *http.Request) (*url.URL, error) {
 		var proxyURL string
-		
+
 		switch req.URL.Scheme {
 		case "http":
 			if httpProxy != "" {
