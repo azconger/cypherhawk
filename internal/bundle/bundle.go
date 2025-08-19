@@ -77,7 +77,9 @@ func DownloadAndValidate() (*x509.CertPool, string, error) {
 			continue
 		}
 
-		bundleSize := len(certPool.Subjects())
+		// Note: Subjects() is deprecated, but we only use it for validation
+		// In the future, we could implement certificate counting differently
+		bundleSize := len(certPool.Subjects()) //nolint:SA1019
 		bundleSizes = append(bundleSizes, bundleSize)
 		successfulSources = append(successfulSources, source.Name)
 
@@ -92,7 +94,7 @@ func DownloadAndValidate() (*x509.CertPool, string, error) {
 	}
 
 	// Cross-validate bundle sizes - they should be similar
-	primarySize := len(primaryBundle.Subjects())
+	primarySize := len(primaryBundle.Subjects()) //nolint:SA1019
 	for i, size := range bundleSizes {
 		if i == 0 {
 			continue // Skip primary

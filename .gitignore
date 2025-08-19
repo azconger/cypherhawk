@@ -2,3 +2,5 @@
 .idea
 /cypherhawk
 *.pem
+/errors.txt
+/output.txt

@@ -452,11 +452,6 @@ func getKeyInfo(cert *x509.Certificate) KeyInfo {
 	}
 }
 
-// Legacy function for backward compatibility
-func getKeySize(cert *x509.Certificate) int {
-	return getKeyInfo(cert).Size
-}
-
 // DisplayChainAnalysis returns a formatted string representation of the chain analysis
 func (analysis *ChainAnalysis) DisplayChainAnalysis() string {
 	var output strings.Builder

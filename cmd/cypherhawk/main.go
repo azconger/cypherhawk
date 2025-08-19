@@ -22,10 +22,17 @@ var (
 
 var (
 	outputFile   = flag.String("o", "", "Output file for CA certificates (use '-' for stdout)")
+	outfileLong  = flag.String("outfile", "", "Output file for CA certificates (use '-' for stdout)")
 	targetURL    = flag.String("url", "", "Custom target URL to test (assumes https:// if no protocol specified)")
-	verbose      = flag.Bool("verbose", false, "Enable verbose output")
+	verbose      = flag.Bool("v", false, "Show detailed progress and security analysis")
+	verboseLong  = flag.Bool("verbose", false, "Show detailed progress and security analysis")
+	quiet        = flag.Bool("q", false, "Suppress all non-error output")
+	quietLong    = flag.Bool("quiet", false, "Suppress all non-error output")
+	silent       = flag.Bool("s", false, "Suppress ALL output (even errors)")
+	silentLong   = flag.Bool("silent", false, "Suppress ALL output (even errors)")
+	analyzeChain = flag.Bool("a", false, "Show comprehensive certificate chain analysis")
+	analyzeLong  = flag.Bool("analyze", false, "Show comprehensive certificate chain analysis")
 	showVersion  = flag.Bool("version", false, "Show version information")
-	analyzeChain = flag.Bool("analyze", false, "Show detailed certificate chain analysis")
 )
 
 // Default endpoints representing common corporate network requirements
@@ -47,6 +54,43 @@ func normalizeURL(url string) string {
 	return "https://" + url
 }
 
+// Helper functions for flag handling
+func getOutputFile() string {
+	if *outfileLong != "" {
+		return *outfileLong
+	}
+	return *outputFile
+}
+
+func isVerbose() bool {
+	return *verbose || *verboseLong
+}
+
+func isQuiet() bool {
+	return *quiet || *quietLong
+}
+
+func isSilent() bool {
+	return *silent || *silentLong
+}
+
+func isAnalyze() bool {
+	return *analyzeChain || *analyzeLong
+}
+
+// Output functions that respect quiet/silent modes
+func printInfo(format string, args ...interface{}) {
+	if !isQuiet() && !isSilent() {
+		fmt.Printf(format, args...)
+	}
+}
+
+func printError(format string, args ...interface{}) {
+	if !isSilent() {
+		fmt.Fprintf(os.Stderr, format, args...)
+	}
+}
+
 func main() {
 	flag.Parse()
 
@@ -55,21 +99,21 @@ func main() {
 		return
 	}
 
-	if *verbose {
-		fmt.Fprintf(os.Stderr, "CypherHawk %s - Detecting corporate DPI/MitM proxies...\n", version)
+	if isVerbose() {
+		printInfo("CypherHawk %s - Detecting corporate DPI/MitM proxies...\n", version)
 	}
 
 	// Step 1: Download and cross-validate Mozilla CA bundles
-	if *verbose {
-		fmt.Fprintf(os.Stderr, "Downloading and cross-validating CA bundles...\n")
+	if isVerbose() {
+		printInfo("Downloading and cross-validating CA bundles...\n")
 	}
 	mozillaCAs, bundleInfo, err := bundle.DownloadAndValidate()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error downloading CA bundles: %v\n", err)
+		printError("Error downloading CA bundles: %v\n", err)
 		os.Exit(2)
 	}
-	if *verbose {
-		fmt.Fprintf(os.Stderr, "Loaded %d trusted CA certificates (%s)\n", len(mozillaCAs.Subjects()), bundleInfo)
+	if isVerbose() {
+		printInfo("Loaded trusted CA certificates (%s)\n", bundleInfo)
 	}
 
 	// Step 2: Determine endpoints to test
@@ -84,42 +128,42 @@ func main() {
 	successCount := 0
 
 	for i, endpoint := range endpoints {
-		if *verbose {
-			fmt.Fprintf(os.Stderr, "Testing endpoint %d/%d: %s\n", i+1, len(endpoints), endpoint)
+		if isVerbose() {
+			printInfo("Testing endpoint %d/%d: %s\n", i+1, len(endpoints), endpoint)
 		}
 
 		certs, err := network.GetCertificateChain(endpoint)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to connect to %s: %v\n", endpoint, err)
+			printError("Failed to connect to %s: %v\n", endpoint, err)
 			continue
 		}
 
 		successCount++
-		if *verbose {
-			fmt.Fprintf(os.Stderr, "Retrieved %d certificates from %s\n", len(certs), endpoint)
+		if isVerbose() {
+			printInfo("Retrieved %d certificates from %s\n", len(certs), endpoint)
 		}
 
 		// Certificate chain analysis (if requested)
-		if *analyzeChain {
+		if isAnalyze() {
 			chainAnalysis := analysis.AnalyzeCertificateChain(endpoint, certs, mozillaCAs)
-			fmt.Print(chainAnalysis.DisplayChainAnalysis())
-			fmt.Println() // Add spacing between endpoints
+			printInfo("%s", chainAnalysis.DisplayChainAnalysis())
+			printInfo("\n") // Add spacing between endpoints
 		}
 
 		// Enhanced security validation with multiple techniques
 		securityIssues := security.PerformEnhancedValidation(certs, mozillaCAs, endpoint)
 
 		// Report security issues if verbose
-		if *verbose && len(securityIssues.SuspiciousBehaviors) > 0 {
-			fmt.Fprintf(os.Stderr, "Security analysis for %s:\n", endpoint)
+		if isVerbose() && len(securityIssues.SuspiciousBehaviors) > 0 {
+			printInfo("Security analysis for %s:\n", endpoint)
 			for _, issue := range securityIssues.SuspiciousBehaviors {
-				fmt.Fprintf(os.Stderr, "  - %s\n", issue)
+				printInfo("  - %s\n", issue)
 			}
 		}
 
 		// Report trust discrepancies if verbose (key diagnostic info for support)
-		if *verbose && len(securityIssues.TrustDiscrepancies) > 0 {
-			fmt.Fprintf(os.Stderr, "Trust store analysis for %s:\n", endpoint)
+		if isVerbose() && len(securityIssues.TrustDiscrepancies) > 0 {
+			printInfo("Trust store analysis for %s:\n", endpoint)
 			for _, discrepancy := range securityIssues.TrustDiscrepancies {
 				osStatus := "Not Trusted"
 				if discrepancy.TrustedByOS {
@@ -130,9 +174,9 @@ func main() {
 					mozillaStatus = "Trusted"
 				}
 
-				fmt.Fprintf(os.Stderr, "  [CERT] %s: OS=%s, Mozilla=%s\n",
+				printInfo("  [CERT] %s: OS=%s, Mozilla=%s\n",
 					discrepancy.Certificate.Subject.CommonName, osStatus, mozillaStatus)
-				fmt.Fprintf(os.Stderr, "         Note: %s\n", discrepancy.Explanation)
+				printInfo("         Note: %s\n", discrepancy.Explanation)
 			}
 		}
 
@@ -141,8 +185,8 @@ func main() {
 			// Check if we already have this certificate (deduplication)
 			if !output.ContainsCertificate(unknownCerts, cert) {
 				unknownCerts = append(unknownCerts, cert)
-				if *verbose {
-					fmt.Fprintf(os.Stderr, "Found unknown CA: %s\n", cert.Subject.CommonName)
+				if isVerbose() {
+					printInfo("Found unknown CA: %s\n", cert.Subject.CommonName)
 				}
 			}
 		}
@@ -150,18 +194,18 @@ func main() {
 
 	// Step 4: Report results
 	if successCount == 0 {
-		fmt.Fprintf(os.Stderr, "Error: Failed to connect to any endpoints\n")
+		printError("Error: Failed to connect to any endpoints\n")
 		os.Exit(2)
 	}
 
 	// If we're just doing chain analysis, exit here
-	if *analyzeChain {
+	if isAnalyze() {
 		os.Exit(0)
 	}
 
 	if len(unknownCerts) == 0 {
-		// Always show success message (not just in verbose mode)
-		fmt.Fprintf(os.Stderr, "[OK] No corporate DPI detected (tested %d endpoint%s)\n",
+		// Always show success message to stdout (unless quiet/silent)
+		printInfo("[OK] No corporate DPI detected (tested %d endpoint%s)\n",
 			successCount,
 			func() string {
 				if successCount == 1 {
@@ -173,11 +217,8 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Step 5: Output unknown certificates in PEM format
-	pemOutput := output.GeneratePEM(unknownCerts)
-
-	// Show detection summary
-	fmt.Fprintf(os.Stderr, "[!] Corporate DPI detected: found %d unknown CA certificate%s\n",
+	// Show detection summary to stdout (unless quiet/silent)
+	printInfo("[!] Corporate DPI detected: found %d unknown CA certificate%s\n",
 		len(unknownCerts),
 		func() string {
 			if len(unknownCerts) == 1 {
@@ -187,15 +228,27 @@ func main() {
 			}
 		}())
 
-	if *outputFile == "" || *outputFile == "-" {
-		fmt.Print(pemOutput)
-	} else {
-		err := os.WriteFile(*outputFile, []byte(pemOutput), 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error writing to file %s: %v\n", *outputFile, err)
-			os.Exit(2)
+	// Handle PEM output based on -o/-outfile flag
+	outputFile := getOutputFile()
+	if outputFile != "" {
+		// Step 5: Output unknown certificates in PEM format
+		pemOutput := output.GeneratePEM(unknownCerts)
+
+		if outputFile == "-" {
+			// Output PEM to stdout
+			fmt.Print(pemOutput)
+		} else {
+			// Output PEM to file
+			err := os.WriteFile(outputFile, []byte(pemOutput), 0644)
+			if err != nil {
+				printError("Error writing to file %s: %v\n", outputFile, err)
+				os.Exit(2)
+			}
+			printInfo("Certificates saved to: %s\n", outputFile)
 		}
-		fmt.Fprintf(os.Stderr, "Certificates saved to: %s\n", *outputFile)
+	} else {
+		// No output file specified - show helpful tip
+		printInfo("Tip: Use -o file.pem to save certificates, or -o - to output PEM data\n")
 	}
 
 	// Exit with partial failure code if some endpoints failed
