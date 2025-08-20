@@ -58,7 +58,7 @@ func getCertificateChainAttempt(targetURL string) ([]*x509.Certificate, error) {
 
 	client := &http.Client{
 		Transport: tr,
-		Timeout:   45 * time.Second, // Increased timeout for corporate networks
+		Timeout:   10 * time.Second, // Fast timeout for better user experience
 	}
 
 	resp, err := client.Get(targetURL)

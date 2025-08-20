@@ -19,21 +19,21 @@ type VendorMatch struct {
 
 // VendorPattern defines detection patterns for a specific DPI vendor
 type VendorPattern struct {
-	Name        string
-	Product     string
-	SubjectPatterns     []string // Regex patterns for certificate subject
-	IssuerPatterns      []string // Regex patterns for certificate issuer
-	OrganizationPatterns []string // Patterns for organization field
-	ValidityPatterns    []ValidityPattern // Typical validity periods
-	KeyUsagePatterns    []x509.KeyUsage   // Expected key usage patterns
-	SerialPatterns      []string // Serial number patterns
-	Guidance           string   // HawkScan integration guidance
+	Name                 string
+	Product              string
+	SubjectPatterns      []string          // Regex patterns for certificate subject
+	IssuerPatterns       []string          // Regex patterns for certificate issuer
+	OrganizationPatterns []string          // Patterns for organization field
+	ValidityPatterns     []ValidityPattern // Typical validity periods
+	KeyUsagePatterns     []x509.KeyUsage   // Expected key usage patterns
+	SerialPatterns       []string          // Serial number patterns
+	Guidance             string            // HawkScan integration guidance
 }
 
 // ValidityPattern defines expected certificate validity characteristics
 type ValidityPattern struct {
-	MinDays int
-	MaxDays int
+	MinDays     int
+	MaxDays     int
 	Description string
 }
 
@@ -361,14 +361,14 @@ var knownVendors = []VendorPattern{
 // DetectVendor analyzes a certificate and returns potential vendor matches
 func DetectVendor(cert *x509.Certificate) []VendorMatch {
 	var matches []VendorMatch
-	
+
 	for _, pattern := range knownVendors {
 		match := analyzeVendorPattern(cert, pattern)
 		if match.Confidence > 0 {
 			matches = append(matches, match)
 		}
 	}
-	
+
 	return matches
 }
 
@@ -381,9 +381,9 @@ func analyzeVendorPattern(cert *x509.Certificate, pattern VendorPattern) VendorM
 		Certificate: cert,
 		Indicators:  []string{},
 	}
-	
+
 	confidence := 0
-	
+
 	// Check subject patterns
 	subject := cert.Subject.String()
 	for _, subjectPattern := range pattern.SubjectPatterns {
@@ -392,8 +392,8 @@ func analyzeVendorPattern(cert *x509.Certificate, pattern VendorPattern) VendorM
 			match.Indicators = append(match.Indicators, "Subject pattern: "+subjectPattern)
 		}
 	}
-	
-	// Check issuer patterns  
+
+	// Check issuer patterns
 	issuer := cert.Issuer.String()
 	for _, issuerPattern := range pattern.IssuerPatterns {
 		if matched, _ := regexp.MatchString(issuerPattern, issuer); matched {
@@ -401,7 +401,7 @@ func analyzeVendorPattern(cert *x509.Certificate, pattern VendorPattern) VendorM
 			match.Indicators = append(match.Indicators, "Issuer pattern: "+issuerPattern)
 		}
 	}
-	
+
 	// Check organization patterns
 	for _, org := range cert.Subject.Organization {
 		for _, orgPattern := range pattern.OrganizationPatterns {
@@ -411,17 +411,17 @@ func analyzeVendorPattern(cert *x509.Certificate, pattern VendorPattern) VendorM
 			}
 		}
 	}
-	
+
 	// Check validity patterns
 	validityDays := int(cert.NotAfter.Sub(cert.NotBefore).Hours() / 24)
 	for _, validityPattern := range pattern.ValidityPatterns {
 		if validityDays >= validityPattern.MinDays && validityDays <= validityPattern.MaxDays {
 			confidence += 10
-			match.Indicators = append(match.Indicators, 
+			match.Indicators = append(match.Indicators,
 				"Validity period: "+validityPattern.Description)
 		}
 	}
-	
+
 	// Check key usage patterns
 	for _, expectedUsage := range pattern.KeyUsagePatterns {
 		if cert.KeyUsage&expectedUsage != 0 {
@@ -429,7 +429,7 @@ func analyzeVendorPattern(cert *x509.Certificate, pattern VendorPattern) VendorM
 			match.Indicators = append(match.Indicators, "Key usage match")
 		}
 	}
-	
+
 	// Check serial number patterns
 	serialStr := cert.SerialNumber.String()
 	for _, serialPattern := range pattern.SerialPatterns {
@@ -438,22 +438,22 @@ func analyzeVendorPattern(cert *x509.Certificate, pattern VendorPattern) VendorM
 			match.Indicators = append(match.Indicators, "Serial number pattern match")
 		}
 	}
-	
+
 	// Additional confidence boosters
 	if cert.Issuer.String() == cert.Subject.String() {
 		// Self-signed certificates are common in DPI environments
 		confidence += 5
 		match.Indicators = append(match.Indicators, "Self-signed certificate")
 	}
-	
+
 	// Version detection for some vendors
 	match.Version = detectVersion(cert, pattern.Name)
-	
+
 	// Cap confidence at 100
 	if confidence > 100 {
 		confidence = 100
 	}
-	
+
 	match.Confidence = confidence
 	return match
 }
@@ -462,7 +462,7 @@ func analyzeVendorPattern(cert *x509.Certificate, pattern VendorPattern) VendorM
 func detectVersion(cert *x509.Certificate, vendor string) string {
 	subject := strings.ToLower(cert.Subject.String())
 	issuer := strings.ToLower(cert.Issuer.String())
-	
+
 	// Palo Alto version detection patterns
 	if strings.Contains(vendor, "Palo Alto") {
 		if strings.Contains(subject, "pan-os") || strings.Contains(issuer, "pan-os") {
@@ -474,7 +474,7 @@ func detectVersion(cert *x509.Certificate, vendor string) string {
 			return "Likely PAN-OS 9.x+ (1-year default cert)"
 		}
 	}
-	
+
 	// Zscaler version detection
 	if strings.Contains(vendor, "Zscaler") {
 		validityDays := cert.NotAfter.Sub(cert.NotBefore).Hours() / 24
@@ -482,7 +482,7 @@ func detectVersion(cert *x509.Certificate, vendor string) string {
 			return "ZIA with 90-day rotation policy"
 		}
 	}
-	
+
 	return ""
 }
 
@@ -491,14 +491,14 @@ func GetBestMatch(matches []VendorMatch) *VendorMatch {
 	if len(matches) == 0 {
 		return nil
 	}
-	
+
 	best := matches[0]
 	for _, match := range matches[1:] {
 		if match.Confidence > best.Confidence {
 			best = match
 		}
 	}
-	
+
 	return &best
 }
 

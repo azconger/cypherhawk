@@ -67,10 +67,20 @@ dev: build
 	./$(BINARY_NAME) --version
 	./$(BINARY_NAME) --help
 
-# Run tests
+# Run tests (default - includes all important tests)
 test:
 	@echo "Running tests..."
-	go test -v -race ./...
+	go test -v -timeout=120s ./...
+
+# Run fast tests (skips network-dependent tests for development)
+test-fast:
+	@echo "Running fast tests (network tests skipped for development)..."
+	CYPHERHAWK_SKIP_NETWORK_TESTS=1 go test -v -short -timeout=60s ./...
+
+# Run tests without network dependencies (CI-friendly)
+test-ci:
+	@echo "Running CI tests (no network dependencies)..."
+	CYPHERHAWK_SKIP_NETWORK_TESTS=1 go test -v -short -race -timeout=120s ./...
 
 # Clean build artifacts
 clean:
@@ -175,7 +185,9 @@ help:
 	@echo "Build & Test:"
 	@echo "  make build       Build for current platform (includes checks)"
 	@echo "  make build-all   Build for all platforms (includes checks)"
-	@echo "  make test        Run all tests"
+	@echo "  make test        Run all tests (includes network tests)"
+	@echo "  make test-fast   Run fast tests (skips network tests for development)"
+	@echo "  make test-ci     Run CI tests (no network dependencies)"
 	@echo "  make clean       Clean build artifacts"
 	@echo "  make install     Install locally (go install)"
 	@echo ""

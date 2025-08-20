@@ -60,7 +60,7 @@ func TestFileSystemCompatibility(t *testing.T) {
 
 		// Try to create a test file in temp directory
 		testFile := filepath.Join(tempDir, "cypherhawk-test.tmp")
-		
+
 		err := os.WriteFile(testFile, []byte("test"), 0644)
 		if err != nil {
 			t.Errorf("Could not write to temp directory: %v", err)
@@ -83,7 +83,7 @@ func TestFileSystemCompatibility(t *testing.T) {
 	t.Run("PathSeparators", func(t *testing.T) {
 		// Test that path operations work correctly on all platforms
 		testPath := filepath.Join("internal", "bundle", "test.pem")
-		
+
 		// Should use correct separator for platform
 		expectedSep := string(filepath.Separator)
 		if !strings.Contains(testPath, expectedSep) && len(testPath) > 10 {
@@ -97,13 +97,9 @@ func TestFileSystemCompatibility(t *testing.T) {
 // TestEnvironmentVariables verifies environment variable handling across platforms
 func TestEnvironmentVariables(t *testing.T) {
 	t.Run("EnvironmentVariableHandling", func(t *testing.T) {
-		// Test proxy environment variable handling
-		originalHTTPProxy := os.Getenv("HTTP_PROXY")
-		originalHTTPSProxy := os.Getenv("HTTPS_PROXY")
-		defer func() {
-			os.Setenv("HTTP_PROXY", originalHTTPProxy)
-			os.Setenv("HTTPS_PROXY", originalHTTPSProxy)
-		}()
+		// Clean proxy environment at start and restore at end
+		cleanup := clearProxyEnvironment(t)
+		defer cleanup()
 
 		// Test setting and reading environment variables
 		testHTTPProxy := "http://test-proxy:8080"
@@ -113,12 +109,12 @@ func TestEnvironmentVariables(t *testing.T) {
 		os.Setenv("HTTPS_PROXY", testHTTPSProxy)
 
 		if os.Getenv("HTTP_PROXY") != testHTTPProxy {
-			t.Errorf("HTTP_PROXY not set correctly: expected %s, got %s", 
+			t.Errorf("HTTP_PROXY not set correctly: expected %s, got %s",
 				testHTTPProxy, os.Getenv("HTTP_PROXY"))
 		}
 
 		if os.Getenv("HTTPS_PROXY") != testHTTPSProxy {
-			t.Errorf("HTTPS_PROXY not set correctly: expected %s, got %s", 
+			t.Errorf("HTTPS_PROXY not set correctly: expected %s, got %s",
 				testHTTPSProxy, os.Getenv("HTTPS_PROXY"))
 		}
 
@@ -141,7 +137,7 @@ func TestNetworkStackCompatibility(t *testing.T) {
 	t.Run("NetworkStackCompatibility", func(t *testing.T) {
 		// Test basic network connectivity
 		// This helps identify platform-specific network issues
-		
+
 		// Download Mozilla CA bundle (tests HTTPS connectivity)
 		_, info, err := bundle.DownloadAndValidate()
 		if err != nil {
@@ -174,7 +170,7 @@ func TestPlatformSpecificBehaviors(t *testing.T) {
 
 func testWindowsSpecificBehaviors(t *testing.T) {
 	// Test Windows-specific behaviors
-	
+
 	// Test that paths work with Windows drive letters
 	if filepath.VolumeName("C:\\test") != "C:" {
 		t.Error("Windows volume name detection not working")
@@ -185,7 +181,7 @@ func testWindowsSpecificBehaviors(t *testing.T) {
 	if os.Getenv("TEST_VAR") == "test_value" {
 		t.Log("✅ Windows case-insensitive environment variables work")
 	}
-	
+
 	// Test Windows proxy authentication format
 	testProxyURL := "http://DOMAIN\\user:pass@proxy:8080"
 	if !strings.Contains(testProxyURL, "DOMAIN\\") {
@@ -197,7 +193,7 @@ func testWindowsSpecificBehaviors(t *testing.T) {
 
 func testMacOSSpecificBehaviors(t *testing.T) {
 	// Test macOS-specific behaviors
-	
+
 	// Test keychain integration (conceptual - actual keychain access would need additional libs)
 	// For now, just verify we can handle macOS paths
 	homeDir, err := os.UserHomeDir()
@@ -213,7 +209,7 @@ func testMacOSSpecificBehaviors(t *testing.T) {
 	// Test case-sensitive filesystem behavior (typical on macOS)
 	testFile1 := filepath.Join(os.TempDir(), "Test.txt")
 	testFile2 := filepath.Join(os.TempDir(), "test.txt")
-	
+
 	os.WriteFile(testFile1, []byte("test1"), 0644)
 	os.WriteFile(testFile2, []byte("test2"), 0644)
 	defer os.Remove(testFile1)
@@ -222,7 +218,7 @@ func testMacOSSpecificBehaviors(t *testing.T) {
 	// On case-sensitive filesystems, these should be different files
 	data1, _ := os.ReadFile(testFile1)
 	data2, _ := os.ReadFile(testFile2)
-	
+
 	if string(data1) == string(data2) {
 		t.Log("Case-insensitive filesystem detected")
 	} else {
@@ -234,7 +230,7 @@ func testMacOSSpecificBehaviors(t *testing.T) {
 
 func testLinuxSpecificBehaviors(t *testing.T) {
 	// Test Linux-specific behaviors
-	
+
 	// Test /etc directory access (common on Linux)
 	if _, err := os.Stat("/etc"); os.IsNotExist(err) {
 		t.Error("Linux /etc directory not found")
@@ -243,7 +239,7 @@ func testLinuxSpecificBehaviors(t *testing.T) {
 	// Test case-sensitive filesystem (standard on Linux)
 	testFile1 := filepath.Join(os.TempDir(), "Test.txt")
 	testFile2 := filepath.Join(os.TempDir(), "test.txt")
-	
+
 	os.WriteFile(testFile1, []byte("test1"), 0644)
 	os.WriteFile(testFile2, []byte("test2"), 0644)
 	defer os.Remove(testFile1)
@@ -251,12 +247,16 @@ func testLinuxSpecificBehaviors(t *testing.T) {
 
 	data1, _ := os.ReadFile(testFile1)
 	data2, _ := os.ReadFile(testFile2)
-	
+
 	if string(data1) != string(data2) {
 		t.Log("✅ Linux case-sensitive filesystem working correctly")
 	}
 
 	// Test Linux proxy environment variable conventions
+	// Clean up proxy environment before and after test
+	cleanup := clearProxyEnvironment(t)
+	defer cleanup()
+
 	os.Setenv("http_proxy", "http://linux-proxy:3128")
 	if os.Getenv("http_proxy") != "http://linux-proxy:3128" {
 		t.Error("Linux lowercase proxy environment variables not working")
@@ -275,7 +275,7 @@ func TestUnicodeHandling(t *testing.T) {
 			t.Logf("Unicode directory creation failed (may be expected): %v", err)
 		} else {
 			defer os.RemoveAll(unicodeDir)
-			
+
 			unicodeFile := filepath.Join(unicodeDir, "тест.txt") // Russian characters
 			err = os.WriteFile(unicodeFile, []byte("Unicode test"), 0644)
 			if err != nil {
@@ -292,7 +292,7 @@ func TestUnicodeHandling(t *testing.T) {
 		}
 
 		// Test that our ASCII output approach works correctly
-		asciiOutput := "[DPI] Corporate DPI detected"  // No Unicode characters
+		asciiOutput := "[DPI] Corporate DPI detected" // No Unicode characters
 		for _, char := range asciiOutput {
 			if char > 127 {
 				t.Errorf("ASCII output contains non-ASCII character: %c", char)
@@ -324,10 +324,20 @@ func TestMemoryUsage(t *testing.T) {
 		runtime.GC()
 		runtime.ReadMemStats(&m2)
 
-		memoryIncrease := m2.Alloc - m1.Alloc
+		// Handle potential integer underflow from GC or memory reuse
+		var memoryIncrease uint64
+		if m2.Alloc >= m1.Alloc {
+			memoryIncrease = m2.Alloc - m1.Alloc
+		} else {
+			// Memory decreased (GC occurred), which is actually good
+			memoryIncrease = 0
+			t.Logf("Memory decreased during test (GC occurred): %d -> %d bytes", m1.Alloc, m2.Alloc)
+		}
+
 		t.Logf("Memory usage for 10 certificate chains: %d bytes", memoryIncrease)
 
 		// Memory usage should be reasonable (less than 10MB for 10 chains)
+		// Note: If memoryIncrease is 0 due to GC, that's actually optimal
 		if memoryIncrease > 10*1024*1024 {
 			t.Errorf("Memory usage too high: %d bytes", memoryIncrease)
 		}
@@ -371,7 +381,7 @@ func TestErrorMessageCompatibility(t *testing.T) {
 	t.Run("ErrorMessages", func(t *testing.T) {
 		// Test that error messages don't contain platform-specific paths or info
 		// that would confuse users on other platforms
-		
+
 		sampleError := "Corporate network guidance:\n" +
 			"  - Corporate firewall might be blocking the connection\n" +
 			"  - Try setting HTTP_PROXY/HTTPS_PROXY environment variables\n" +

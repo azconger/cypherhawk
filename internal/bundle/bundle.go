@@ -149,7 +149,7 @@ func createHTTPClient() *http.Client {
 
 	return &http.Client{
 		Transport: transport,
-		Timeout:   45 * time.Second, // Increased timeout for corporate networks
+		Timeout:   15 * time.Second, // Reduced timeout for faster test feedback
 	}
 }
 

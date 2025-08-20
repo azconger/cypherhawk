@@ -24,18 +24,20 @@ var (
 )
 
 var (
-	outputFile   = flag.String("o", "", "Output file for CA certificates (use '-' for stdout)")
-	outfileLong  = flag.String("outfile", "", "Output file for CA certificates (use '-' for stdout)")
-	targetURL    = flag.String("url", "", "Custom target URL to test (assumes https:// if no protocol specified)")
-	verbose      = flag.Bool("v", false, "Show detailed progress and security analysis")
-	verboseLong  = flag.Bool("verbose", false, "Show detailed progress and security analysis")
-	quiet        = flag.Bool("q", false, "Suppress all non-error output")
-	quietLong    = flag.Bool("quiet", false, "Suppress all non-error output")
-	silent       = flag.Bool("s", false, "Suppress ALL output (even errors)")
-	silentLong   = flag.Bool("silent", false, "Suppress ALL output (even errors)")
-	analyzeChain = flag.Bool("a", false, "Show comprehensive certificate chain analysis")
-	analyzeLong  = flag.Bool("analyze", false, "Show comprehensive certificate chain analysis")
-	showVersion  = flag.Bool("version", false, "Show version information")
+	outputFile    = flag.String("o", "", "Output file for CA certificates (use '-' for stdout)")
+	outfileLong   = flag.String("outfile", "", "Output file for CA certificates (use '-' for stdout)")
+	targetURL     = flag.String("url", "", "Custom target URL to test (assumes https:// if no protocol specified)")
+	verbose       = flag.Bool("v", false, "Show detailed progress and security analysis")
+	verboseLong   = flag.Bool("verbose", false, "Show detailed progress and security analysis")
+	quiet         = flag.Bool("q", false, "Suppress all non-error output")
+	quietLong     = flag.Bool("quiet", false, "Suppress all non-error output")
+	silent        = flag.Bool("s", false, "Suppress ALL output (even errors)")
+	silentLong    = flag.Bool("silent", false, "Suppress ALL output (even errors)")
+	analyzeChain  = flag.Bool("a", false, "Show comprehensive certificate chain analysis")
+	analyzeLong   = flag.Bool("analyze", false, "Show comprehensive certificate chain analysis")
+	showVersion   = flag.Bool("version", false, "Show version information")
+	showHelp      = flag.Bool("help", false, "Show detailed help and usage examples")
+	showHelpShort = flag.Bool("h", false, "Show detailed help and usage examples")
 )
 
 // Default endpoints representing common corporate network requirements
@@ -179,29 +181,29 @@ func generateDPISummary(results []*detection.DetectionResult) string {
 	var totalUnknownCAs int
 	var detectedVendors = make(map[string]*detection.VendorMatch)
 	var hasHighConfidenceDetection bool
-	
+
 	// Analyze all results
 	for _, result := range results {
 		totalUnknownCAs += len(result.UnknownCAs)
-		
+
 		if result.BestMatch != nil {
 			// Keep the highest confidence match for each vendor
 			vendor := result.BestMatch.Vendor
 			if existing, exists := detectedVendors[vendor]; !exists || result.BestMatch.Confidence > existing.Confidence {
 				detectedVendors[vendor] = result.BestMatch
 			}
-			
+
 			if result.BestMatch.Confidence >= 70 {
 				hasHighConfidenceDetection = true
 			}
 		}
 	}
-	
+
 	// Generate summary message
 	if len(detectedVendors) == 0 {
 		return fmt.Sprintf("[DPI] Corporate DPI detected: found %d unknown CA certificate(s)", totalUnknownCAs)
 	}
-	
+
 	// Single vendor detected
 	if len(detectedVendors) == 1 {
 		for _, vendor := range detectedVendors {
@@ -209,12 +211,12 @@ func generateDPISummary(results []*detection.DetectionResult) string {
 			if hasHighConfidenceDetection {
 				confidenceText = fmt.Sprintf(" (%d%% confidence)", vendor.Confidence)
 			}
-			
-			return fmt.Sprintf("[DPI] %s detected%s - %d CA certificate(s) need extraction", 
+
+			return fmt.Sprintf("[DPI] %s detected%s - %d CA certificate(s) need extraction",
 				vendor.Vendor, confidenceText, totalUnknownCAs)
 		}
 	}
-	
+
 	// Multiple vendors detected
 	var vendorNames []string
 	for _, vendor := range detectedVendors {
@@ -222,14 +224,14 @@ func generateDPISummary(results []*detection.DetectionResult) string {
 			vendorNames = append(vendorNames, vendor.Vendor)
 		}
 	}
-	
+
 	if len(vendorNames) == 0 {
 		return fmt.Sprintf("[DPI] Unknown DPI vendor detected - %d CA certificate(s) need extraction", totalUnknownCAs)
 	} else if len(vendorNames) == 1 {
-		return fmt.Sprintf("[DPI] %s detected - %d CA certificate(s) need extraction", 
+		return fmt.Sprintf("[DPI] %s detected - %d CA certificate(s) need extraction",
 			vendorNames[0], totalUnknownCAs)
 	} else {
-		return fmt.Sprintf("[DPI] Multiple DPI vendors detected (%s) - %d CA certificate(s) need extraction", 
+		return fmt.Sprintf("[DPI] Multiple DPI vendors detected (%s) - %d CA certificate(s) need extraction",
 			strings.Join(vendorNames, ", "), totalUnknownCAs)
 	}
 }
@@ -271,8 +273,113 @@ func printError(format string, args ...interface{}) {
 	}
 }
 
+// showCustomHelp displays comprehensive help with HawkScan integration examples
+func showCustomHelp() {
+	fmt.Printf(`CypherHawk %s - Corporate DPI/MitM Detection Tool
+
+DESCRIPTION:
+    CypherHawk detects corporate Deep Packet Inspection (DPI) firewalls and 
+    man-in-the-middle proxies, then extracts their CA certificates for use 
+    with Java applications and security tools like HawkScan.
+
+USAGE:
+    cypherhawk [options] [-url <target>] [-o <output-file>]
+
+    Basic usage:
+        cypherhawk                          # Test against default endpoints
+        cypherhawk -url example.com         # Test specific target
+        cypherhawk -o certs.pem             # Save certificates to file
+
+OPTIONS:
+    -url <target>       Custom target URL to test (default: tests 4 endpoints)
+    -o, -outfile <file> Output file for CA certificates (use '-' for stdout)
+    
+    Analysis:
+        -v, -verbose    Show detailed progress and security analysis  
+        -a, -analyze    Show comprehensive certificate chain analysis
+        
+    Output control:
+        -q, -quiet      Suppress all non-error output
+        -s, -silent     Suppress ALL output (even errors)
+        
+    Information:
+        -version        Show version information
+        -h, -help       Show this help message
+
+HAWKSCAN INTEGRATION EXAMPLES:
+
+    1. Detect corporate DPI and extract certificates:
+        cypherhawk -o corporate-certs.pem
+        
+    2. Use certificates with HawkScan (PEM format - Java 9+):
+        hawk scan --ca-bundle corporate-certs.pem
+        
+    3. Convert PEM to JKS format for older Java versions:
+        keytool -importcert -noprompt -file corporate-certs.pem \
+                -keystore corporate.jks -storepass changeit -alias corporate-ca
+        
+    4. Use JKS with HawkScan:
+        hawk scan -Djavax.net.ssl.trustStore=corporate.jks \
+                  -Djavax.net.ssl.trustStorePassword=changeit
+
+COMMON WORKFLOWS:
+
+    Corporate network evaluation:
+        cypherhawk -verbose -analyze -o results.pem
+        
+    Test specific internal service:
+        cypherhawk -url https://internal.company.com -verbose
+        
+    Quick check for DPI presence:
+        cypherhawk -quiet
+        
+    Generate certificates for CI/CD:
+        cypherhawk -o - | tee hawkscan-certs.pem
+
+EXAMPLES:
+
+    # Basic DPI detection
+    cypherhawk
+    
+    # Verbose analysis with certificate extraction  
+    cypherhawk -verbose -o corporate-dpi.pem
+    
+    # Test custom endpoint with detailed analysis
+    cypherhawk -url https://api.company.com -analyze
+    
+    # Silent mode for scripting (exit codes: 0=no DPI, 1=DPI detected, 2=error)
+    cypherhawk -silent -o certs.pem && echo "DPI certificates saved"
+
+INTEGRATION WITH OTHER TOOLS:
+
+    Maven with PEM certificates (Java 9+):
+        mvn clean install -Djavax.net.ssl.trustStoreType=PEM \
+                         -Djavax.net.ssl.trustStore=corporate-certs.pem
+    
+    Gradle with JKS certificates:
+        ./gradlew build -Djavax.net.ssl.trustStore=corporate.jks \
+                       -Djavax.net.ssl.trustStorePassword=changeit
+
+For more information, visit: https://github.com/azconger/cypherhawk
+
+`, version)
+}
+
 func main() {
+	// Custom flag parsing to handle help before flag.Parse()
+	for _, arg := range os.Args[1:] {
+		if arg == "-h" || arg == "--help" || arg == "-help" {
+			showCustomHelp()
+			return
+		}
+	}
+
 	flag.Parse()
+
+	if *showHelp || *showHelpShort {
+		showCustomHelp()
+		return
+	}
 
 	if *showVersion {
 		fmt.Printf("CypherHawk %s (built %s)\n", version, buildTime)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -10,6 +11,11 @@ import (
 )
 
 func TestDPIVendorDetectionIntegration(t *testing.T) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		t.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	// Download Mozilla CA bundle for realistic testing
 	mozillaCAs, _, err := bundle.DownloadAndValidate()
 	if err != nil {
@@ -20,48 +26,48 @@ func TestDPIVendorDetectionIntegration(t *testing.T) {
 		name                    string
 		mockCerts               *testdata.MockDPICertificates
 		expectedVendor          string
-		minConfidence          int
-		shouldDetectDPI        bool
+		minConfidence           int
+		shouldDetectDPI         bool
 		expectedRecommendations int
 	}{
 		{
 			name:                    "Palo Alto Networks Detection",
 			mockCerts:               testdata.GeneratePaloAltoCertificateChain(),
 			expectedVendor:          "Palo Alto Networks",
-			minConfidence:          70,
-			shouldDetectDPI:        true,
+			minConfidence:           70,
+			shouldDetectDPI:         true,
 			expectedRecommendations: 3,
 		},
 		{
 			name:                    "Zscaler Detection",
 			mockCerts:               testdata.GenerateZscalerCertificateChain(),
 			expectedVendor:          "Zscaler",
-			minConfidence:          60,
-			shouldDetectDPI:        true,
+			minConfidence:           60,
+			shouldDetectDPI:         true,
 			expectedRecommendations: 3,
 		},
 		{
-			name:                    "Netskope Detection", 
+			name:                    "Netskope Detection",
 			mockCerts:               testdata.GenerateNetskopeCertificateChain(),
 			expectedVendor:          "Netskope",
-			minConfidence:          60,
-			shouldDetectDPI:        true,
+			minConfidence:           60,
+			shouldDetectDPI:         true,
 			expectedRecommendations: 3,
 		},
 		{
 			name:                    "Generic Corporate DPI Detection",
 			mockCerts:               testdata.GenerateGenericCorporateCertificateChain(),
 			expectedVendor:          "Generic DPI/Proxy",
-			minConfidence:          40,
-			shouldDetectDPI:        true,
+			minConfidence:           40,
+			shouldDetectDPI:         true,
 			expectedRecommendations: 3,
 		},
 		{
 			name:                    "Squid Proxy Detection",
 			mockCerts:               testdata.GenerateSquidProxyCertificateChain(),
 			expectedVendor:          "Squid Proxy",
-			minConfidence:          30,
-			shouldDetectDPI:        true,
+			minConfidence:           30,
+			shouldDetectDPI:         true,
 			expectedRecommendations: 3,
 		},
 	}
@@ -122,13 +128,18 @@ func TestDPIVendorDetectionIntegration(t *testing.T) {
 
 func TestLegitimateWebsiteNoFalsePositives(t *testing.T) {
 	t.Skip("Skipping false positive test - requires proper Mozilla CA bundle setup with mock root CA")
-	
+
 	// Note: This test would require adding our mock GlobalSign root CA to the Mozilla bundle
 	// or using an embedded test bundle that includes legitimate CAs. For comprehensive testing,
 	// we focus on positive DPI detection which is the primary use case.
 }
 
 func TestDPIDetectionConfidenceScoring(t *testing.T) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		t.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	mozillaCAs, _, err := bundle.DownloadAndValidate()
 	if err != nil {
 		t.Fatalf("Failed to download Mozilla CA bundle: %v", err)
@@ -178,7 +189,7 @@ func TestDPIDetectionConfidenceScoring(t *testing.T) {
 			}
 
 			if actualLevel != tc.expectedLevel {
-				t.Errorf("Expected confidence level %s, got %s (confidence: %d%%)", 
+				t.Errorf("Expected confidence level %s, got %s (confidence: %d%%)",
 					tc.expectedLevel, actualLevel, confidence)
 			}
 
@@ -188,6 +199,11 @@ func TestDPIDetectionConfidenceScoring(t *testing.T) {
 }
 
 func TestDPIDetectionIndicators(t *testing.T) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		t.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	mozillaCAs, _, err := bundle.DownloadAndValidate()
 	if err != nil {
 		t.Fatalf("Failed to download Mozilla CA bundle: %v", err)
@@ -195,8 +211,8 @@ func TestDPIDetectionIndicators(t *testing.T) {
 
 	// Test that specific indicators are detected
 	testCases := []struct {
-		name              string
-		mockCerts         *testdata.MockDPICertificates
+		name               string
+		mockCerts          *testdata.MockDPICertificates
 		expectedIndicators []string
 	}{
 		{
@@ -246,7 +262,7 @@ func TestDPIDetectionIndicators(t *testing.T) {
 					}
 				}
 				if !found {
-					t.Errorf("Expected indicator containing '%s' but not found in: %v", 
+					t.Errorf("Expected indicator containing '%s' but not found in: %v",
 						expectedIndicator, indicators)
 				}
 			}
@@ -257,6 +273,11 @@ func TestDPIDetectionIndicators(t *testing.T) {
 }
 
 func TestSecurityFlagsDetection(t *testing.T) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		t.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	mozillaCAs, _, err := bundle.DownloadAndValidate()
 	if err != nil {
 		t.Fatalf("Failed to download Mozilla CA bundle: %v", err)
@@ -295,6 +316,11 @@ func TestSecurityFlagsDetection(t *testing.T) {
 }
 
 func TestHawkScanIntegrationRecommendations(t *testing.T) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		t.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	mozillaCAs, _, err := bundle.DownloadAndValidate()
 	if err != nil {
 		t.Fatalf("Failed to download Mozilla CA bundle: %v", err)
@@ -314,25 +340,30 @@ func TestHawkScanIntegrationRecommendations(t *testing.T) {
 			// Check for HawkScan-specific recommendations
 			hawkScanMentions := 0
 			for _, rec := range result.Recommendations {
-				if strings.Contains(strings.ToLower(rec), "hawkscan") || 
-				   strings.Contains(strings.ToLower(rec), "hawk scan") ||
-				   strings.Contains(rec, "--ca-bundle") {
+				if strings.Contains(strings.ToLower(rec), "hawkscan") ||
+					strings.Contains(strings.ToLower(rec), "hawk scan") ||
+					strings.Contains(rec, "--ca-bundle") {
 					hawkScanMentions++
 				}
 			}
 
 			if hawkScanMentions == 0 {
-				t.Errorf("Expected HawkScan integration recommendations but found none in: %v", 
+				t.Errorf("Expected HawkScan integration recommendations but found none in: %v",
 					result.Recommendations)
 			}
 
-			t.Logf("✅ Found %d HawkScan integration recommendations for %s", 
+			t.Logf("✅ Found %d HawkScan integration recommendations for %s",
 				hawkScanMentions, chain.Vendor)
 		})
 	}
 }
 
 func BenchmarkDPIDetection(b *testing.B) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		b.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	mozillaCAs, _, err := bundle.DownloadAndValidate()
 	if err != nil {
 		b.Fatalf("Failed to download Mozilla CA bundle: %v", err)
@@ -347,6 +378,11 @@ func BenchmarkDPIDetection(b *testing.B) {
 }
 
 func TestDPIReportFormatting(t *testing.T) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		t.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	mozillaCAs, _, err := bundle.DownloadAndValidate()
 	if err != nil {
 		t.Fatalf("Failed to download Mozilla CA bundle: %v", err)

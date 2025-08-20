@@ -25,6 +25,11 @@ import (
 
 // TestMozillaCATrustedCertificate tests that a certificate signed by a Mozilla CA is trusted
 func TestMozillaCATrustedCertificate(t *testing.T) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		t.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	// Download Mozilla CA bundle
 	mozillaCAs, _, err := bundle.DownloadAndValidate()
 	if err != nil {
@@ -60,6 +65,11 @@ func TestMozillaCATrustedCertificate(t *testing.T) {
 
 // TestUnknownCADetection tests detection of unknown CA certificates using a mock DPI server
 func TestUnknownCADetection(t *testing.T) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		t.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	t.Log("=== Starting Mock DPI Server Test ===")
 
 	// Create a mock CA certificate (simulating corporate DPI)
@@ -462,6 +472,10 @@ func TestLegitimateCAImpersonation(t *testing.T) {
 func TestEnhancedSecurityValidation(t *testing.T) {
 	t.Log("=== Testing Enhanced Security Validation Features ===")
 
+	// Clean proxy environment for network operations
+	cleanup := clearProxyEnvironment(t)
+	defer cleanup()
+
 	// Test 1: Certificate Transparency validation
 	t.Log("Testing Certificate Transparency validation...")
 
@@ -589,6 +603,11 @@ func createSuspiciousCertificate(t *testing.T) *x509.Certificate {
 
 // TestRealisticDPIEnvironments tests multiple realistic DPI scenarios
 func TestRealisticDPIEnvironments(t *testing.T) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		t.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	t.Log("=== Testing Realistic Corporate DPI Environments ===")
 
 	scenarios := []struct {
@@ -723,6 +742,11 @@ func (f DPIFeatures) shouldBeDetected() bool {
 
 // TestAdvancedDPITechniques tests sophisticated DPI evasion and detection
 func TestAdvancedDPITechniques(t *testing.T) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		t.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	t.Log("=== Testing Advanced DPI Techniques ===")
 
 	tests := []struct {
@@ -1133,6 +1157,11 @@ func testAdvancedDetection(t *testing.T, serverURL, testName string) {
 
 // TestIntegration runs a complete integration test
 func TestIntegration(t *testing.T) {
+	// Skip network-dependent tests in fast mode
+	if os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1" {
+		t.Skip("Skipping network-dependent test in fast mode")
+	}
+
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
