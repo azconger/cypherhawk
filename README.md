@@ -1,22 +1,20 @@
 # CypherHawk
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/kaakaww/cypherhawk)](https://golang.org/dl/)
-[![License](https://img.shields.io/github/license/kaakaww/cypherhawk)](LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/kaakaww/cypherhawk/build.yml?branch=main)](https://github.com/kaakaww/cypherhawk/actions)
 
-A command-line tool to detect corporate Deep Packet Inspection (DPI) firewalls and man-in-the-middle (MitM) proxies, then extract their CA certificates for Java applications and security tools.
+A production-ready command-line tool that detects corporate Deep Packet Inspection (DPI) firewalls and man-in-the-middle (MitM) proxies, extracts their CA certificates, and provides comprehensive security analysis with advanced threat detection capabilities.
 
-CypherHawk uses Mozilla's trusted CA bundle for validation and supports custom target URLs for flexible testing. Built by StackHawk but designed for the broader Java ecosystem including Maven, Gradle, Spring Boot applications, and other security tools.
+CypherHawk features vendor identification for 15+ enterprise security platforms, behavioral analysis, Certificate Transparency validation, and HawkScan-optimized PEM output. Built by StackHawk but designed for the broader Java ecosystem including Maven, Gradle, Spring Boot applications, and security tools like HawkScan.
 
 ## Features
 
-- **🔍 Corporate DPI Detection**: Automatically detects enterprise security infrastructure
-- **🚨 Advanced Threat Detection**: Identifies malicious MitM attacks vs. legitimate corporate proxies
+- **🔍 Corporate DPI Detection**: Automatically detects enterprise security infrastructure with 15+ vendor patterns
+- **🚨 Advanced Threat Detection**: Identifies malicious MitM attacks vs. legitimate corporate proxies using risk scoring
 - **📋 Certificate Chain Analysis**: Detailed analysis of TLS certificate chains with anomaly detection
 - **🛡️ Security Validation**: Certificate Transparency validation, behavioral analysis, and CA impersonation detection
-- **📦 PEM Output**: Extracts unknown CA certificates in standard PEM format for easy integration
-- **⚡ Fast & Reliable**: Single binary with no dependencies, 30-second timeouts, graceful error handling
-- **🔒 Enterprise-Ready**: Supports major DPI vendors (Palo Alto, Zscaler, Netskope, etc.)
+- **📦 HawkScan Integration**: Optimized PEM output with comprehensive usage examples and custom help system
+- **⚡ Fast & Reliable**: Single binary with no dependencies, 10-second timeouts, retry logic, graceful error handling
+- **🔒 Enterprise-Ready**: Supports 15+ major DPI vendors with confidence scoring and vendor identification
+- **🌐 Cross-Platform**: Comprehensive testing on Windows, macOS, Linux with proxy environment support
 
 ## Quick Start
 
@@ -37,13 +35,16 @@ go build -o cypherhawk ./cmd/cypherhawk
 ./cypherhawk
 
 # Test a specific website
-./cypherhawk -url example.com
+./cypherhawk -url https://example.com
 
-# Analyze certificate chain details
-./cypherhawk --analyze -url github.com
+# Show comprehensive help with HawkScan integration examples
+./cypherhawk --help
+
+# Enable detailed security analysis
+./cypherhawk --verbose -url https://internal.company.com
 
 # Save certificates to file
-./cypherhawk -o corporate-certs.pem -url internal.company.com
+./cypherhawk -o corporate-certs.pem -url https://internal.company.com
 ```
 
 ## Usage Examples
@@ -56,9 +57,19 @@ $ ./cypherhawk
 ✓ No corporate DPI detected (tested 4 endpoints)
 
 # When DPI is detected
-$ ./cypherhawk -url internal.corp.com
+$ ./cypherhawk -url https://internal.corp.com
 ⚠ Corporate DPI detected: found 1 unknown CA certificate
-# PEM certificates follow...
+
+# CypherHawk - Corporate DPI/MitM CA Certificates
+# Generated for HawkScan integration
+#
+# Usage with HawkScan:
+#   hawk scan --ca-bundle this-file.pem
+#
+# [DPI] Palo Alto Networks DPI detected (confidence: 85%)
+-----BEGIN CERTIFICATE-----
+MIIDXTCCAkWgAwIBAgIJAKoK/mNGOWj3MA0GCSqGSIb3DQEBCwUAMEUxCzAJBgNV...
+-----END CERTIFICATE-----
 ```
 
 ### Certificate Chain Analysis
@@ -128,19 +139,31 @@ Chain Anomalies:
 Usage: ./cypherhawk [options]
 
 Options:
-  -analyze              Show detailed certificate chain analysis
+  -h, --help            Show comprehensive help with HawkScan integration examples
   -o string             Output file for CA certificates (use '-' for stdout)
   -url string           Custom target URL to test (assumes https:// if no protocol specified)
-  -verbose              Enable verbose output
-  -version              Show version information
+  -v, --verbose         Enable detailed security analysis output
+  --version             Show version information
+
+Environment Variables:
+  HTTP_PROXY            HTTP proxy URL for corporate networks
+  HTTPS_PROXY           HTTPS proxy URL for corporate networks
+  CYPHERHAWK_SKIP_NETWORK_TESTS  Set to "1" to skip network tests (testing mode)
 ```
 
 ## Integration with Java Applications
 
-### StackHawk Scanner
+### StackHawk Scanner (HawkScan)
 ```bash
+# Extract corporate DPI certificates
 ./cypherhawk -o corporate-certs.pem
+
+# Use with HawkScan
 hawk scan --ca-bundle corporate-certs.pem
+
+# For specific target testing
+./cypherhawk -url https://internal.corp.com -o corp-internal.pem
+hawk scan --ca-bundle corp-internal.pem
 ```
 
 ### Java Applications (PEM format - Java 9+)
@@ -189,12 +212,13 @@ mvn clean install \
 
 CypherHawk works by:
 
-1. **Downloading Mozilla's trusted CA bundle** from multiple sources with cross-validation
-2. **Testing TLS connections** to default endpoints (or your custom URL)
-3. **Analyzing certificate chains** using browser-like validation logic
-4. **Detecting unknown CAs** that aren't in Mozilla's trusted bundle
-5. **Performing security analysis** with Certificate Transparency validation, behavioral analysis, and threat detection
-6. **Extracting CA certificates** that likely belong to corporate DPI infrastructure
+1. **Downloading Mozilla's trusted CA bundle** from multiple sources with cross-validation and integrity checking
+2. **Testing TLS connections** to default endpoints (or your custom URL) with retry logic and 10-second timeouts
+3. **Analyzing certificate chains** using browser-like validation logic with enhanced behavioral analysis
+4. **Detecting unknown CAs** that aren't in Mozilla's trusted bundle using advanced threat detection
+5. **Performing security analysis** with Certificate Transparency validation, 10+ behavioral indicators, and CA impersonation detection
+6. **Vendor identification** using 15+ enterprise DPI vendor patterns with confidence scoring
+7. **Extracting CA certificates** in HawkScan-optimized PEM format with comprehensive usage instructions
 
 ### Default Test Endpoints
 
@@ -218,19 +242,23 @@ CypherHawk works by:
 
 ### Enterprise DPI Vendor Detection
 
-CypherHawk recognizes certificates from major enterprise security vendors:
+CypherHawk recognizes certificates from 15+ major enterprise security vendors with confidence scoring:
 
-- Palo Alto Networks
-- Zscaler
-- Netskope
-- Forcepoint
-- Cisco/BlueCoat
-- McAfee Web Gateway
-- Symantec ProxySG
-- Checkpoint
-- Fortinet
-- Sophos
-- And many more...
+- **Palo Alto Networks** - Next-Generation Firewalls and Prisma Access
+- **Zscaler** - Cloud Security Platform and Private Access
+- **Netskope** - Cloud Access Security Broker (CASB)
+- **Forcepoint** - Web Security and Data Protection
+- **Cisco/BlueCoat** - Web Security Appliance and Cloud Web Security
+- **McAfee/Trellix** - Web Gateway and Network Security Platform
+- **Symantec/Broadcom** - ProxySG and Web Security Service
+- **Check Point** - Threat Prevention and Mobile Access
+- **Fortinet** - FortiGate and FortiProxy
+- **Sophos** - XG Firewall and Cloud Optix
+- **iBoss** - Cloud Security Platform
+- **Menlo Security** - Isolation Platform
+- **Wandera/Jamf** - Mobile Threat Defense
+- **CrowdStrike** - Falcon Go and Cloud Workload Protection
+- **CloudFlare for Teams** - Zero Trust Network Access
 
 ## Exit Codes
 
@@ -274,29 +302,40 @@ make fmt        # Fix formatting issues
 
 ```
 cypherhawk/
-├── cmd/cypherhawk/        # Main CLI application
+├── cmd/cypherhawk/              # Main CLI application with custom help system
 ├── internal/
-│   ├── analysis/         # Certificate chain analysis and DPI detection
-│   ├── bundle/           # Mozilla CA bundle management
-│   ├── network/          # TLS certificate retrieval
-│   ├── output/           # PEM formatting and file output
-│   └── security/         # Advanced security validation
-├── main_test.go          # Comprehensive test suite
+│   ├── analysis/               # Certificate chain analysis and DPI detection
+│   ├── bundle/                 # Mozilla CA bundle management with multi-source validation
+│   ├── network/                # TLS certificate retrieval with retry logic and proxy support
+│   ├── output/                 # HawkScan-optimized PEM formatting and file output
+│   └── security/               # Advanced security validation (CT, behavioral analysis, CA impersonation)
+├── testdata/                   # Mock certificate generation for 6+ DPI vendors
+├── main_test.go                # Core security validation tests with mock DPI environments
+├── cross_platform_test.go      # Cross-platform compatibility tests (Windows, macOS, Linux)
+├── network_conditions_test.go  # Network condition and error handling tests
+├── hawkscan_integration_test.go # HawkScan PEM compatibility tests
+├── test_utils.go               # Test utilities and proxy environment cleanup
 └── README.md
 ```
 
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (comprehensive test suite)
 go test -v ./...
 
 # Run specific test suites
-go test -v -run TestRealisticDPIEnvironments
-go test -v -run TestAdvancedDPITechniques
+go test -v -run TestEnhancedSecurityValidation    # Core security testing
+go test -v -run TestCrossPlatformCompatibility    # Cross-platform testing
+go test -v -run TestNetworkConditions             # Network condition testing
+go test -v -run TestHawkScanPEMCompatibility      # HawkScan integration testing
 
-# Generate test artifacts for inspection
-go test -v -run TestWithArtifacts
+# Run tests with network skip (faster for development)
+CYPHERHAWK_SKIP_NETWORK_TESTS=1 go test -v ./...
+
+# Run specific vendor tests
+go test -v -run TestPaloAltoDetection
+go test -v -run TestZscalerDetection
 ```
 
 ## Contributing
@@ -315,11 +354,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 CypherHawk is a **defensive security tool** designed to help users adapt to corporate security infrastructure:
 
-- **Legitimate purpose**: Detects and extracts CA certificates from corporate DPI/MitM proxies
+- **Legitimate purpose**: Detects and extracts CA certificates from corporate DPI/MitM proxies with advanced threat analysis
+- **Multiple CA bundle validation**: Cross-validates Mozilla's trusted CA bundles from multiple sources with integrity checking
+- **Advanced security validation**: Combines Certificate Transparency checking, behavioral analysis, and CA impersonation detection
 - **No malicious capability**: Cannot create, modify, or bypass security controls
-- **Read-only operation**: Only extracts and outputs certificate information
+- **Read-only operation**: Only extracts and outputs certificate information with comprehensive security analysis
 - **No telemetry**: Tool does not send usage data or certificates to external services
-- **Local operation**: All certificate analysis performed locally
+- **Local operation**: All certificate analysis performed locally with enhanced security algorithms
 
 ## Support
 
@@ -330,5 +371,6 @@ CypherHawk is a **defensive security tool** designed to help users adapt to corp
 ## Acknowledgments
 
 - Built by [StackHawk](https://stackhawk.com) for the Java security community
-- Uses Mozilla's trusted CA bundle from [curl.se](https://curl.se/ca/cacert.pem)
-- Inspired by the need to simplify corporate Java application deployment
+- Uses Mozilla's trusted CA bundle from [curl.se](https://curl.se/ca/cacert.pem) and GitHub mirror with cross-validation
+- Inspired by the need to simplify corporate Java application deployment and HawkScan integration
+- Comprehensive testing infrastructure with mock DPI environments for 6+ major enterprise security vendors

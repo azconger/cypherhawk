@@ -2,16 +2,34 @@
 
 ## Project Overview
 
-CLI utility to detect corporate Deep Packet Inspection (DPI) firewalls and man-in-the-middle (MitM) proxies, then extract their CA certificates for Java applications and security tools. Uses Mozilla's trusted CA bundle for validation and supports custom target URLs for flexible testing.
+Production-ready CLI utility that detects corporate Deep Packet Inspection (DPI) firewalls and man-in-the-middle (MitM) proxies, extracts their CA certificates, and provides comprehensive security analysis. Features advanced threat detection capabilities with vendor identification, behavioral analysis, and Certificate Transparency validation.
 
-Built by StackHawk but designed for the broader Java ecosystem including Maven, Gradle, Spring Boot applications, and other security tools.
+Built by StackHawk but designed for the broader Java ecosystem including Maven, Gradle, Spring Boot applications, and security tools like HawkScan.
+
+## Current Status: Phase 3 Complete ✅
+
+**✅ Phase 1-3 COMPLETED Features:**
+- Core DPI detection with Mozilla CA bundle validation
+- Enhanced security analysis with 15+ vendor detection patterns  
+- Comprehensive test suite with mock DPI environments
+- Advanced threat detection including Certificate Transparency validation
+- Behavioral analysis detecting 10+ suspicious certificate indicators
+- Cross-platform compatibility testing
+- Network condition testing and proxy environment cleanup
+- HawkScan integration optimization
+
+**🚧 Current Focus:**
+- Comprehensive HawkScan integration documentation
+- Usage examples and common workflow guidance
+- Production deployment optimization
 
 ## Project Type
-- Language: Go
-- Type: CLI application
-- Distribution: Single static binary (no dependencies)
-- Validation: Mozilla CA bundle from curl.se/ca/cacert.pem
-- Structure: Standard Go project layout with modular internal packages
+- **Language:** Go (zero external dependencies)
+- **Type:** CLI application for defensive security analysis
+- **Distribution:** Single static binary (no dependencies required)
+- **Validation:** Multiple Mozilla CA bundle sources with cross-validation
+- **Architecture:** Modular internal packages with comprehensive test coverage
+- **Security Focus:** Corporate DPI detection, threat analysis, defensive tooling
 
 ## Build Commands
 
@@ -65,7 +83,7 @@ make clean          # Clean build artifacts
 cypherhawk/
 ├── cmd/
 │   └── cypherhawk/         # Main application entry point
-│       └── main.go         # CLI interface (~125 lines)
+│       └── main.go         # CLI interface with custom help system (~200 lines)
 ├── internal/               # Internal packages (not importable by other projects)
 │   ├── bundle/            # CA bundle management (~118 lines)
 │   │   └── bundle.go      # Multiple source download and cross-validation
@@ -73,11 +91,17 @@ cypherhawk/
 │   │   └── analysis.go    # Chain validation and DPI detection
 │   ├── security/          # Security validation features (~242 lines)
 │   │   └── security.go    # CT validation, behavioral analysis, CA impersonation
-│   ├── network/           # Network operations (~55 lines)
-│   │   └── network.go     # Certificate retrieval and TLS handling
-│   └── output/            # Output generation (~41 lines)
-│       └── output.go      # PEM formatting and deduplication
+│   ├── network/           # Network operations (~247 lines)
+│   │   └── network.go     # Certificate retrieval, retry logic, proxy support
+│   └── output/            # Output generation (~85 lines)
+│       └── output.go      # HawkScan-optimized PEM formatting and deduplication
+├── testdata/              # Test data and mock certificate generation
+│   └── testdata.go        # Mock DPI certificate chains for 6+ vendors (~300 lines)
 ├── main_test.go           # Comprehensive security validation tests (~640 lines)
+├── cross_platform_test.go # Cross-platform compatibility tests (~409 lines)
+├── network_conditions_test.go # Network condition and error handling tests (~492 lines)
+├── hawkscan_integration_test.go # HawkScan PEM compatibility tests (~150 lines)
+├── test_utils.go          # Test utilities and proxy environment cleanup (~58 lines)
 ├── go.mod                 # Go module definition (github.com/kaakaww/cypherhawk)
 ├── go.sum                 # Go module checksums
 ├── CLAUDE.md              # Context file for Claude Code
@@ -89,28 +113,58 @@ cypherhawk/
 
 | File/Package | Purpose |
 |--------------|---------|
-| `cmd/cypherhawk/main.go` | Main CLI application entry point - handles command-line interface, orchestrates other packages |
+| `cmd/cypherhawk/main.go` | Main CLI application entry point with custom help system - handles command-line interface, orchestrates other packages |
 | `internal/bundle/` | CA bundle management - downloads Mozilla CA bundles from multiple sources with cross-validation |
 | `internal/analysis/` | Certificate chain analysis - browser-like validation, DPI detection, trust verification |
 | `internal/security/` | Advanced security features - Certificate Transparency validation, behavioral analysis, CA impersonation detection |
-| `internal/network/` | Network operations - TLS certificate retrieval with InsecureSkipVerify |
-| `internal/output/` | Output generation - PEM formatting, certificate deduplication |
-| `main_test.go` | Comprehensive test suite with mock DPI environments and security validation tests |
-| `go.mod` | Go module definition with GitHub import path - no external dependencies |
+| `internal/network/` | Network operations - TLS certificate retrieval, retry logic, proxy support, enhanced error handling |
+| `internal/output/` | Output generation - HawkScan-optimized PEM formatting, certificate deduplication |
+| `testdata/testdata.go` | Mock certificate generation for 6+ DPI vendors - realistic test data for comprehensive validation |
+| `main_test.go` | Core security validation tests with mock DPI environments and advanced threat detection |
+| `cross_platform_test.go` | Cross-platform compatibility tests for Windows, macOS, Linux |
+| `network_conditions_test.go` | Network condition testing - timeouts, retries, proxy authentication, DNS failures |
+| `hawkscan_integration_test.go` | HawkScan PEM compatibility tests - format validation, ordering, metadata |
+| `test_utils.go` | Test utilities including proxy environment cleanup to prevent test pollution |
+| `go.mod` | Go module definition with GitHub import path - zero external dependencies |
 
 ## Testing Strategy
 
-### Functional Testing (main_test.go)
-- **Advanced security validation tests** with mock certificate generation
-- **Simulated DPI environment** by creating test TLS server with custom CA
-- **Mock CA and server certificates** for realistic MitM scenario testing  
+CypherHawk features a comprehensive test suite with 4 specialized test files covering different aspects:
+
+### Core Security Testing (main_test.go)
+- **Advanced security validation tests** with mock certificate generation for 6+ DPI vendors
+- **Simulated DPI environment** by creating test TLS server with custom CA chains
+- **Mock CA and server certificates** for realistic MitM scenario testing (Palo Alto, Zscaler, Netskope, etc.)
 - **Certificate Transparency validation tests** - Verifies CT evidence checking for recent certificates
 - **Behavioral analysis tests** - Tests detection of 10+ suspicious certificate indicators
 - **CA impersonation detection tests** - Validates detection of fake certificates claiming to be from legitimate CAs
 - **Multiple CA bundle source tests** - Tests cross-validation of CA bundles from multiple sources
 - **Enhanced security validation integration tests** - Tests combined security analysis with risk scoring
-- **Comprehensive validation** that tool correctly detects and extracts unknown CAs with advanced threat detection
 - **Production-ready testing** suitable for CI/CD pipelines
+
+### Cross-Platform Testing (cross_platform_test.go)
+- **Platform compatibility** - Windows, macOS, Linux support validation
+- **File system operations** - Path separators, temp directory access, Unicode handling
+- **Environment variable handling** - Proxy configuration across platforms
+- **Memory usage validation** - Reasonable resource consumption with GC handling
+- **Executable naming conventions** - Platform-specific binary naming
+- **Error message portability** - Platform-neutral error guidance
+
+### Network Condition Testing (network_conditions_test.go)
+- **Timeout handling** - 10-second timeout validation with proper retry logic
+- **Connection failure scenarios** - DNS failures, connection refused, proxy authentication
+- **Retry logic validation** - Exponential backoff, non-retryable error detection
+- **Proxy support testing** - HTTP/HTTPS proxy environment variable handling
+- **TLS handshake error handling** - Invalid certificates, protocol failures
+- **Concurrent connection testing** - Multiple simultaneous connections
+- **Real-world network scenarios** - Corporate firewall, DNS blocking, proxy authentication
+
+### HawkScan Integration Testing (hawkscan_integration_test.go)
+- **PEM format compliance** - RFC-compliant certificate formatting
+- **Certificate ordering** - Proper leaf-to-root chain ordering
+- **Metadata compatibility** - HawkScan-specific header formatting
+- **Concatenation validation** - Multiple certificate chains in single file
+- **Usage instruction embedding** - Clear integration guidance in output
 
 ### Default Test Endpoints
 The tool tests against four key endpoints that represent common corporate network requirements:
@@ -121,9 +175,11 @@ The tool tests against four key endpoints that represent common corporate networ
 - **AWS S3** - `https://s3.us-west-2.amazonaws.com` (for pre-signed URLs)
 
 **Connection Handling:**
-- 30-second timeout per endpoint
+- 10-second timeout per endpoint (optimized for user experience)
+- Retry logic with exponential backoff (3 attempts max)
 - Graceful failure handling for dropped connections
 - Continues testing remaining endpoints if one fails
+- Enhanced corporate network error guidance
 - Reports which endpoints succeeded/failed in output
 
 ### DPI Detection
@@ -140,10 +196,11 @@ The tool tests against four key endpoints that represent common corporate networ
   - Weak signature algorithms (MD5, SHA1)
   - Future-dated certificates and unusual chain lengths
 - **CA impersonation detection** - Identifies certificates claiming to be from legitimate CAs (Google, DigiCert, Let's Encrypt) but with suspicious characteristics
-- **Vendor identification** for major DPI providers (Palo Alto, Netskope, Zscaler, etc.)
+- **Vendor identification** for 15+ major DPI providers (Palo Alto, Netskope, Zscaler, Fortinet, Check Point, etc.)
 - **Risk scoring system** - Combines multiple suspicious indicators for high-confidence detection (3+ indicators = HIGH RISK)
 - **Unknown CA extraction** - Identifies certificates not trusted by Mozilla's CA bundle
 - **Certificate deduplication** across multiple endpoints
+- **Enhanced error handling** - Corporate network guidance with specific troubleshooting steps
 
 ## Command Line Interface
 
@@ -154,6 +211,7 @@ cypherhawk -url https://example.com # Test specific target URL
 cypherhawk -o certs.pem            # Save certificates to file
 cypherhawk -o -                    # Output certificates to stdout
 cypherhawk --verbose               # Enable detailed security analysis output
+cypherhawk --help                 # Show comprehensive HawkScan integration help
 
 # Future enhanced modes (Phase 4+)
 cypherhawk --mode paranoid         # Alert on ANY unknown certificates (untrusted networks)
@@ -163,6 +221,14 @@ cypherhawk --geoip-check          # Include geographic risk assessment
 cypherhawk --output-format json   # Machine-readable output
 ```
 
+**Custom Help System:**
+CypherHawk features a comprehensive custom help system (`--help`) that includes:
+- Detailed HawkScan integration examples and workflows
+- PEM and JKS certificate format usage instructions
+- Common corporate network troubleshooting guidance
+- Maven, Gradle, and Java application integration examples
+- Corporate proxy configuration examples
+
 **Verbose Mode Security Output:**
 When using `--verbose`, the tool provides detailed security analysis including:
 - Certificate Transparency validation results
@@ -170,6 +236,7 @@ When using `--verbose`, the tool provides detailed security analysis including:
 - Hostname validation results
 - CA impersonation detection alerts
 - Risk scoring when multiple suspicious indicators are detected
+- Vendor-specific DPI detection details
 
 **Future Enhanced Output (Phase 4+):**
 - Network context analysis (public WiFi risk assessment)
@@ -178,10 +245,11 @@ When using `--verbose`, the tool provides detailed security analysis including:
 - Real-time monitoring alerts and webhook notifications
 
 ### Key Functions (main.go)
-- **Mozilla CA download** - Downloads trusted CA bundle from curl.se/ca/cacert.pem
-- **HTTP client creation** - Uses InsecureSkipVerify to capture all certificate chains
-- **Certificate chain analysis** - Compares received certificates against Mozilla bundle
-- **PEM conversion** - Converts unknown CA certificates to standard PEM format via `certToPEM()`
+- **Custom help system** - Comprehensive HawkScan integration guidance via `showCustomHelp()`
+- **Mozilla CA download** - Downloads trusted CA bundle from multiple sources with cross-validation
+- **HTTP client creation** - Uses InsecureSkipVerify to capture all certificate chains with proxy support
+- **Certificate chain analysis** - Advanced security analysis with vendor detection and behavioral analysis
+- **PEM conversion** - Converts unknown CA certificates to HawkScan-optimized PEM format
 
 ## MVP Implementation Plan
 
@@ -208,6 +276,10 @@ When using `--verbose`, the tool provides detailed security analysis including:
 4. ✅ **CA impersonation detection** - Identify certificates falsely claiming to be from legitimate CAs
 5. ✅ **Enhanced certificate chain validation** - Browser-like verification with hostname validation
 6. ✅ **Risk scoring system** - Combine multiple suspicious indicators for high-confidence detection
+7. ✅ **Comprehensive test suite** - 4 specialized test files covering security, cross-platform, network conditions, and HawkScan integration
+8. ✅ **Enhanced vendor detection** - 15+ DPI vendor patterns with confidence scoring
+9. ✅ **Network reliability improvements** - Retry logic, timeout optimization (10s), proxy environment cleanup
+10. ✅ **HawkScan integration optimization** - Custom help system, optimized PEM output, integration examples
 
 **Phase 4 - Enhanced Modes & Use Cases:**
 1. **Detection modes** - Multiple operating modes for different scenarios:
@@ -256,12 +328,13 @@ When using `--verbose`, the tool provides detailed security analysis including:
 
 When modifying this project, common tasks include:
 
-1. **Mozilla CA bundle integration** - Enhancing the Mozilla CA validation logic and caching
-2. **Certificate validation improvements** - Enhanced chain analysis and comparison algorithms
-3. **Connection reliability** - Improved timeout handling, retry logic, and network resilience
-4. **DPI vendor detection** - New patterns for additional enterprise security vendors
-5. **Output format options** - Additional formats like JSON, YAML, or direct JKS generation
-6. **Testing enhancements** - More sophisticated mock DPI scenarios and edge case testing
+1. **DPI vendor detection** - Adding patterns for new enterprise security vendors (current: 15+ vendors)
+2. **Certificate validation enhancements** - New behavioral analysis indicators and CA impersonation patterns
+3. **Output format options** - Additional formats like JSON, YAML, or direct JKS generation
+4. **Testing improvements** - Expanding mock DPI scenarios and edge case coverage
+5. **HawkScan integration** - Optimizing PEM format compatibility and usage examples
+6. **Network reliability** - Enhancing corporate network detection and error guidance
+7. **Cross-platform support** - Ensuring compatibility across Windows, macOS, Linux environments
 
 ## Target Audience
 
@@ -353,10 +426,12 @@ This is a **defensive security tool** designed to help users adapt to corporate 
 ## Error Handling Strategy
 
 **Network Errors:**
-- **Connection timeouts** - 30-second timeout per endpoint with clear error messages
-- **DNS resolution failures** - Graceful handling with specific error reporting
+- **Connection timeouts** - 10-second timeout per endpoint with clear error messages
+- **Retry logic** - Exponential backoff with 3 attempts max for retryable errors
+- **DNS resolution failures** - Graceful handling with specific corporate network guidance
 - **Certificate parsing errors** - Continue processing other certificates, report parsing failures
 - **HTTP errors** - Distinguish between network issues and HTTP status errors
+- **Proxy support** - Enhanced proxy authentication and configuration error handling
 
 **Certificate Processing:**
 - **Invalid certificate chains** - Log errors but continue processing valid certificates
