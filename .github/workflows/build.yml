@@ -30,6 +30,11 @@ jobs:
     - name: Download dependencies
       run: go mod download
 
+    - name: Update CA bundle
+      run: |
+        chmod +x scripts/update-ca-bundle.sh
+        ./scripts/update-ca-bundle.sh
+
     - name: Run tests
       run: go test -v -race -coverprofile=coverage.out ./...
 
