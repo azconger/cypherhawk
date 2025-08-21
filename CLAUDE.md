@@ -40,11 +40,13 @@ go run ./cmd/cypherhawk -url https://example.com  # Run with custom target URL
 go run ./cmd/cypherhawk -o certs.pem # Save certificates to file
 go test -v ./...               # Run comprehensive tests with mock DPI simulation
 
-# Build
-go build -o cypherhawk ./cmd/cypherhawk  # Build single binary
+# Build (includes fresh CA bundle download)
+make build                    # Build with latest Mozilla CA bundle
+make update-ca-bundle         # Manually update CA bundle
+go build -o cypherhawk ./cmd/cypherhawk  # Build single binary (uses existing CA bundle)
 
 # Cross-platform builds (advanced)
-make build-all      # Build for all platforms (if Makefile exists)
+make build-all      # Build for all platforms with fresh CA bundle
 make package        # Create release archives
 make clean          # Clean build artifacts
 ```
@@ -52,10 +54,19 @@ make clean          # Clean build artifacts
 ## Development Workflow
 
 1. Use `go run ./cmd/cypherhawk -url <target>` for testing during development
-2. Use `go build -o cypherhawk ./cmd/cypherhawk` to create local binary for testing
+2. Use `make build` to create local binary with fresh CA bundle for testing
 3. Use `go test -v ./...` to run comprehensive functional tests with simulated DPI environments
-4. Use `make build-all` for cross-platform binaries when preparing releases (if Makefile exists)
-5. Test against various corporate environments when possible
+4. Use `make build-all` for cross-platform binaries when preparing releases (includes CA bundle update)
+5. Use `make update-ca-bundle` to manually refresh the embedded CA bundle
+6. Test against various corporate environments when possible
+
+**Important:** Always use `make build` or `make build-all` for production builds to ensure the embedded CA bundle is fresh. Direct `go build` commands will fail if no embedded bundle exists.
+
+**Build System Design:**
+- `make clean` removes the embedded CA bundle to force fresh downloads
+- `make build` downloads latest CA bundle before building 
+- No static CA bundle is checked into git - always downloaded fresh
+- CI/CD builds always get the latest Mozilla CA certificates
 
 ## Architecture & Design Decisions
 
@@ -67,6 +78,7 @@ make clean          # Clean build artifacts
 - **Mozilla CA validation** - Uses Mozilla's trusted CA bundle for accurate MitM detection
 
 ### Key Components
+- **Build-time CA bundle updates** - Downloads latest Mozilla CA certificates during build process to prevent stale embedded bundles
 - **Multiple CA bundle sources** - Cross-validates Mozilla CA bundles from multiple sources with integrity checking
 - **Enhanced certificate chain validation** - Browser-like certificate verification with hostname validation
 - **Certificate Transparency validation** - Checks for SCT extensions in recent certificates
@@ -95,6 +107,8 @@ cypherhawk/
 │   │   └── network.go     # Certificate retrieval, retry logic, proxy support
 │   └── output/            # Output generation (~85 lines)
 │       └── output.go      # HawkScan-optimized PEM formatting and deduplication
+├── scripts/              # Build and automation scripts
+│   └── update-ca-bundle.sh # Downloads latest Mozilla CA bundle at build time (~140 lines)
 ├── testdata/              # Test data and mock certificate generation
 │   └── testdata.go        # Mock DPI certificate chains for 6+ vendors (~300 lines)
 ├── main_test.go           # Comprehensive security validation tests (~640 lines)
@@ -102,11 +116,12 @@ cypherhawk/
 ├── network_conditions_test.go # Network condition and error handling tests (~492 lines)
 ├── hawkscan_integration_test.go # HawkScan PEM compatibility tests (~150 lines)
 ├── test_utils.go          # Test utilities and proxy environment cleanup (~58 lines)
+├── Makefile               # Build automation with CA bundle updates and cross-platform builds (~230 lines)
 ├── go.mod                 # Go module definition (github.com/kaakaww/cypherhawk)
 ├── go.sum                 # Go module checksums
 ├── CLAUDE.md              # Context file for Claude Code
 ├── README.md              # User documentation and usage examples
-└── .github/workflows/build.yml  # Automated testing and release building
+└── .github/workflows/build.yml  # Automated testing and release building with fresh CA bundles
 ```
 
 ## Key Files
@@ -119,12 +134,14 @@ cypherhawk/
 | `internal/security/` | Advanced security features - Certificate Transparency validation, behavioral analysis, CA impersonation detection |
 | `internal/network/` | Network operations - TLS certificate retrieval, retry logic, proxy support, enhanced error handling |
 | `internal/output/` | Output generation - HawkScan-optimized PEM formatting, certificate deduplication |
+| `scripts/update-ca-bundle.sh` | Build-time script that downloads latest Mozilla CA bundle to prevent stale embedded certificates |
 | `testdata/testdata.go` | Mock certificate generation for 6+ DPI vendors - realistic test data for comprehensive validation |
 | `main_test.go` | Core security validation tests with mock DPI environments and advanced threat detection |
 | `cross_platform_test.go` | Cross-platform compatibility tests for Windows, macOS, Linux |
 | `network_conditions_test.go` | Network condition testing - timeouts, retries, proxy authentication, DNS failures |
 | `hawkscan_integration_test.go` | HawkScan PEM compatibility tests - format validation, ordering, metadata |
 | `test_utils.go` | Test utilities including proxy environment cleanup to prevent test pollution |
+| `Makefile` | Build automation with CA bundle updates, cross-platform builds, and comprehensive testing |
 | `go.mod` | Go module definition with GitHub import path - zero external dependencies |
 
 ## Testing Strategy

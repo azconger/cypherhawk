@@ -25,7 +25,7 @@ Download the latest binary from [releases](https://github.com/kaakaww/cypherhawk
 ```bash
 git clone https://github.com/kaakaww/cypherhawk.git
 cd cypherhawk
-go build -o cypherhawk ./cmd/cypherhawk
+make build  # Downloads latest CA bundle and builds binary
 ```
 
 ### Basic Usage
@@ -212,13 +212,14 @@ mvn clean install \
 
 CypherHawk works by:
 
-1. **Downloading Mozilla's trusted CA bundle** from multiple sources with cross-validation and integrity checking
-2. **Testing TLS connections** to default endpoints (or your custom URL) with retry logic and 10-second timeouts
-3. **Analyzing certificate chains** using browser-like validation logic with enhanced behavioral analysis
-4. **Detecting unknown CAs** that aren't in Mozilla's trusted bundle using advanced threat detection
-5. **Performing security analysis** with Certificate Transparency validation, 10+ behavioral indicators, and CA impersonation detection
-6. **Vendor identification** using 15+ enterprise DPI vendor patterns with confidence scoring
-7. **Extracting CA certificates** in HawkScan-optimized PEM format with comprehensive usage instructions
+1. **Fresh CA bundle at build time** - Downloads latest Mozilla CA certificates during build to prevent stale embedded fallback bundles
+2. **Runtime CA bundle download** - Downloads Mozilla's trusted CA bundle from multiple sources with cross-validation and integrity checking
+3. **Testing TLS connections** to default endpoints (or your custom URL) with retry logic and 10-second timeouts
+4. **Analyzing certificate chains** using browser-like validation logic with enhanced behavioral analysis
+5. **Detecting unknown CAs** that aren't in Mozilla's trusted bundle using advanced threat detection
+6. **Performing security analysis** with Certificate Transparency validation, 10+ behavioral indicators, and CA impersonation detection
+7. **Vendor identification** using 15+ enterprise DPI vendor patterns with confidence scoring
+8. **Extracting CA certificates** in HawkScan-optimized PEM format with comprehensive usage instructions
 
 ### Default Test Endpoints
 
@@ -279,8 +280,14 @@ CypherHawk recognizes certificates from 15+ major enterprise security vendors wi
 git clone https://github.com/kaakaww/cypherhawk.git
 cd cypherhawk
 
-# Quick build (includes code quality checks)
+# Quick build (downloads fresh CA bundle + includes code quality checks)
 make build
+
+# Clean build (removes embedded CA bundle for completely fresh download)
+make clean && make build
+
+# Update CA bundle manually
+make update-ca-bundle
 
 # Full development workflow
 make pre-commit  # Run all checks + tests before committing
@@ -288,13 +295,15 @@ make pre-commit  # Run all checks + tests before committing
 # Run tests
 make test
 
-# Cross-platform builds
+# Cross-platform builds (downloads fresh CA bundle)
 make build-all
 
 # Code quality checks
 make check      # Format check + vet + lint
 make fmt        # Fix formatting issues
 ```
+
+**Important:** Always use `make build` rather than direct `go build` commands. The embedded CA bundle is downloaded fresh at build time and is not checked into git.
 
 ## Development
 

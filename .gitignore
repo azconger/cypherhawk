@@ -1,6 +1,17 @@
 
+# IDE files
 .idea
+.vscode
+
+# Build artifacts
 /cypherhawk
+cypherhawk-*
 *.pem
+test-artifacts-*.pem
+
+# Downloaded CA bundle (refreshed at build time)
+internal/bundle/embedded/cacert.pem
+
+# Development files
 /errors.txt
 /output.txt

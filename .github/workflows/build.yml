@@ -81,6 +81,11 @@ jobs:
         go-version: '1.23'
         check-latest: true
 
+    - name: Update CA bundle
+      run: |
+        chmod +x scripts/update-ca-bundle.sh
+        ./scripts/update-ca-bundle.sh
+
     - name: Build binary
       env:
         GOOS: ${{ matrix.goos }}

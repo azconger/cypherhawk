@@ -8,8 +8,19 @@ import (
 // This provides fallback certificate validation when external downloads fail
 // in corporate environments with restricted internet access.
 //
-// The bundle is updated during the build process from Mozilla's trusted CA sources.
-// Source: https://curl.se/ca/cacert.pem
+// The bundle is automatically updated during the build process (make build/build-all)
+// by downloading the latest Mozilla CA certificates from trusted sources.
+//
+// Build-time update process:
+//  1. scripts/update-ca-bundle.sh downloads latest bundle from curl.se
+//  2. Falls back to GitHub mirror if primary source fails
+//  3. Validates downloaded certificates and embeds them in the binary
+//
+// This ensures the embedded fallback bundle is always fresh at build time
+// rather than using a potentially stale static file.
+//
+// Primary source: https://curl.se/ca/cacert.pem
+// Backup source: https://raw.githubusercontent.com/bagder/ca-bundle/master/ca-bundle.crt
 //
 //go:embed cacert.pem
 var EmbeddedCACerts []byte

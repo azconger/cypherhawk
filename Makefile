@@ -1,5 +1,5 @@
 # CypherHawk - Cross-platform build automation
-.PHONY: build build-all clean test help install dev fmt fmt-check lint vet check pre-commit
+.PHONY: build build-all clean test help install dev fmt fmt-check lint vet check pre-commit update-ca-bundle
 
 # Build variables
 BINARY_NAME := cypherhawk
@@ -56,8 +56,13 @@ check: fmt-check vet lint
 pre-commit: check test
 	@echo "✅ Pre-commit checks completed successfully"
 
+# Update CA bundle with latest Mozilla certificates
+update-ca-bundle:
+	@echo "Updating Mozilla CA bundle..."
+	@./scripts/update-ca-bundle.sh
+
 # Development build (current platform)
-build: check
+build: update-ca-bundle check
 	@echo "Building CypherHawk $(VERSION) for $(shell go env GOOS)/$(shell go env GOARCH)..."
 	$(GOFLAGS) go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/cypherhawk
 
@@ -69,18 +74,20 @@ dev: build
 
 # Run tests (default - includes all important tests)
 test:
-	@echo "Running tests..."
-	go test -v -timeout=120s ./...
+	go test -v -count=1 -timeout=120s ./...
 
 # Run fast tests (skips network-dependent tests for development)
 test-fast:
-	@echo "Running fast tests (network tests skipped for development)..."
-	CYPHERHAWK_SKIP_NETWORK_TESTS=1 go test -v -short -timeout=60s ./...
+	CYPHERHAWK_SKIP_NETWORK_TESTS=1 go test -v -count=1 -short -timeout=60s ./...
 
 # Run tests without network dependencies (CI-friendly)
 test-ci:
-	@echo "Running CI tests (no network dependencies)..."
-	CYPHERHAWK_SKIP_NETWORK_TESTS=1 go test -v -short -race -timeout=120s ./...
+	CYPHERHAWK_SKIP_NETWORK_TESTS=1 go test -v -count=1 -short -race -timeout=120s ./...
+
+# Run tests with enhanced output for development
+test-watch:
+	@echo "🧪 Running tests with real-time output (Ctrl+C to stop)..."
+	go test -v -count=1 -timeout=120s ./... | tee test-output.log
 
 # Clean build artifacts
 clean:
@@ -89,6 +96,11 @@ clean:
 	rm -f $(BINARY_NAME)-*
 	rm -f *.pem
 	rm -f test-artifacts-*.pem
+	rm -f internal/bundle/embedded/cacert.pem
+	rm -f test-output.log
+	rm -f output.txt
+	rm -f errors.txt
+	@echo "✅ Build artifacts cleaned (including embedded CA bundle for fresh download)"
 
 # Install locally (for developers)
 install:
@@ -96,7 +108,7 @@ install:
 	$(GOFLAGS) go install $(LDFLAGS) ./cmd/cypherhawk
 
 # Cross-platform builds
-build-all: check clean
+build-all: update-ca-bundle check clean
 	@echo "Building CypherHawk $(VERSION) for all platforms..."
 	
 	# Linux builds
@@ -175,20 +187,22 @@ help:
 	@echo "CypherHawk Build System"
 	@echo ""
 	@echo "Code Quality:"
-	@echo "  make fmt         Format Go code with gofmt"
-	@echo "  make fmt-check   Check if code is formatted (CI-friendly)"
-	@echo "  make vet         Run go vet"
-	@echo "  make lint        Run staticcheck (if installed)"
-	@echo "  make check       Run all code quality checks (fmt-check + vet + lint)"
-	@echo "  make pre-commit  Run all checks + tests (recommended before commits)"
+	@echo "  make fmt               Format Go code with gofmt"
+	@echo "  make fmt-check         Check if code is formatted (CI-friendly)"
+	@echo "  make vet               Run go vet"
+	@echo "  make lint              Run staticcheck (if installed)"
+	@echo "  make check             Run all code quality checks (fmt-check + vet + lint)"
+	@echo "  make pre-commit        Run all checks + tests (recommended before commits)"
+	@echo "  make update-ca-bundle  Download latest Mozilla CA bundle for embedding"
 	@echo ""
 	@echo "Build & Test:"
 	@echo "  make build       Build for current platform (includes checks)"
 	@echo "  make build-all   Build for all platforms (includes checks)"
-	@echo "  make test        Run all tests (includes network tests)"
-	@echo "  make test-fast   Run fast tests (skips network tests for development)"
+	@echo "  make test        Run all tests with real-time output (includes network tests)"
+	@echo "  make test-fast   Run fast tests with real-time output (skips network tests)"
+	@echo "  make test-watch  Run tests with enhanced real-time output and logging"
 	@echo "  make test-ci     Run CI tests (no network dependencies)"
-	@echo "  make clean       Clean build artifacts"
+	@echo "  make clean       Clean build artifacts (forces fresh CA bundle download)"
 	@echo "  make install     Install locally (go install)"
 	@echo ""
 	@echo "Development:"

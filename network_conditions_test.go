@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -103,19 +102,12 @@ func TestTimeoutHandling(t *testing.T) {
 
 	// Test that GetCertificateChain handles timeouts
 	t.Run("TimeoutHandling", func(t *testing.T) {
-		// Create a test server that accepts connections but never responds
-		// This will trigger client timeout
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatalf("Failed to create test listener: %v", err)
-		}
-		defer listener.Close()
-
-		// Don't accept connections - this will hang the client
-		testURL := fmt.Sprintf("https://%s", listener.Addr().String())
+		// Use a non-routable IP address that will cause connection timeout
+		// 198.51.100.1 is a documentation IP that should not be routable
+		testURL := "https://198.51.100.1:443"
 
 		start := time.Now()
-		_, err = network.GetCertificateChain(testURL)
+		_, err := network.GetCertificateChain(testURL)
 		duration := time.Since(start)
 
 		// Should timeout and return error
@@ -124,15 +116,15 @@ func TestTimeoutHandling(t *testing.T) {
 			return // Exit early to prevent panic on err.Error()
 		}
 
-		// Should timeout within reasonable time (our timeout is 10 seconds per attempt + retry logic)
-		// With 3 attempts: 10s + 2s + 10s + 4s + 10s = ~36s max
-		if duration > 40*time.Second {
-			t.Errorf("Timeout took too long: %v (expected < 40s)", duration)
+		// Should timeout within reasonable time (our dial timeout is 5 seconds per attempt + retry logic)
+		// With 3 attempts: 5s + 2s + 5s + 4s + 5s = ~21s max
+		if duration > 25*time.Second {
+			t.Errorf("Timeout took too long: %v (expected < 25s)", duration)
 		}
 
 		// Should be reasonably fast (at least complete within first timeout)
-		if duration < 8*time.Second {
-			t.Errorf("Timeout happened too quickly: %v (expected at least 8s)", duration)
+		if duration < 4*time.Second {
+			t.Errorf("Timeout happened too quickly: %v (expected at least 4s)", duration)
 		}
 
 		// Log the error for analysis but don't require specific error messages
@@ -150,27 +142,11 @@ func TestRetryLogic(t *testing.T) {
 	}
 
 	t.Run("RetryLogic", func(t *testing.T) {
-		// Create multiple listeners on different ports to test retry behavior
-		// Use listeners that don't accept connections to simulate timeouts
-		listeners := make([]net.Listener, 3)
-		for i := 0; i < 3; i++ {
-			listener, err := net.Listen("tcp", "127.0.0.1:0")
-			if err != nil {
-				t.Fatalf("Failed to create test listener %d: %v", i, err)
-			}
-			listeners[i] = listener
-			defer listener.Close()
-		}
-
-		// Close the first two listeners to simulate temporary failures
-		// Keep the third one open to simulate eventual success
-		listeners[0].Close()
-		listeners[1].Close()
-		// listeners[2] stays open but doesn't accept connections -> timeout
+		// Use a non-routable IP address that will cause connection timeout
+		// This will trigger retry logic since timeouts are retryable
+		testURL := "https://198.51.100.2:443"
 
 		start := time.Now()
-		// Test against the third listener which will timeout (retryable error)
-		testURL := fmt.Sprintf("https://%s", listeners[2].Addr().String())
 		_, err := network.GetCertificateChain(testURL)
 		duration := time.Since(start)
 
@@ -181,13 +157,13 @@ func TestRetryLogic(t *testing.T) {
 		}
 
 		// Should have taken time for retries
-		// With 3 attempts and 10s timeout each: ~30s + retry delays (~6s) = ~36s total
-		if duration < 25*time.Second {
-			t.Errorf("Expected retry delays, completed too quickly: %v (expected ~36s)", duration)
+		// With 3 attempts and 5s dial timeout each: ~15s + retry delays (~6s) = ~21s total
+		if duration < 15*time.Second {
+			t.Errorf("Expected retry delays, completed too quickly: %v (expected ~21s)", duration)
 		}
 
-		if duration > 45*time.Second {
-			t.Errorf("Retry took too long: %v (expected ~36s)", duration)
+		if duration > 30*time.Second {
+			t.Errorf("Retry took too long: %v (expected ~21s)", duration)
 		}
 
 		// Should mention "failed after 3 attempts" indicating retry happened

@@ -44,11 +44,20 @@ func GetCertificateChain(targetURL string) ([]*x509.Certificate, error) {
 
 // getCertificateChainAttempt performs a single attempt to get certificates
 func getCertificateChainAttempt(targetURL string) ([]*x509.Certificate, error) {
-	// Create HTTP transport with corporate proxy support
+	// Create HTTP transport with corporate proxy support and proper timeouts
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
+		// Set dial timeout to prevent hanging on non-routable IPs
+		DialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,  // Connection timeout
+			KeepAlive: 30 * time.Second, // Keep alive for reuse
+		}).DialContext,
+		// TLS handshake timeout
+		TLSHandshakeTimeout: 5 * time.Second,
+		// Response header timeout
+		ResponseHeaderTimeout: 10 * time.Second,
 	}
 
 	// Configure HTTP proxy support from environment variables
