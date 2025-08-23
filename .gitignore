@@ -15,3 +15,5 @@ internal/bundle/embedded/cacert.pem
 # Development files
 /errors.txt
 /output.txt
+/coverage.html
+/coverage.out

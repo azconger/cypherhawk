@@ -74,7 +74,9 @@ dev: build
 
 # Run tests (default - includes all important tests)
 test:
-	go test -v -count=1 -timeout=120s ./...
+	go test -v -count=1 -race -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report: coverage.html"
 
 # Run fast tests (skips network-dependent tests for development)
 test-fast:

@@ -35,18 +35,6 @@ jobs:
         chmod +x scripts/update-ca-bundle.sh
         ./scripts/update-ca-bundle.sh
 
-    - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out ./...
-
-    - name: Upload coverage reports
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.out
-        fail_ci_if_error: false
-
-    - name: Run go vet
-      run: go vet ./...
-
     - name: Run go fmt check
       run: |
         if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
@@ -54,6 +42,9 @@ jobs:
           gofmt -s -l .
           exit 1
         fi
+
+    - name: Run go vet
+      run: go vet ./...
 
     - name: Check go mod tidy
       run: |
@@ -68,6 +59,15 @@ jobs:
         else
           echo "go mod tidy is clean - no changes to tracked files"
         fi
+
+    - name: Run tests
+      run: make test
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        fail_ci_if_error: false
 
   build-matrix:
     runs-on: ubuntu-latest
