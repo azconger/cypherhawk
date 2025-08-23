@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/kaakaww/cypherhawk/internal/detection"
-	"github.com/kaakaww/cypherhawk/testdata"
+	"github.com/kaakaww/cypherhawk/test/testdata"
 )
 
 // TestDPIDetectionWithoutNetwork tests core DPI detection without network dependencies

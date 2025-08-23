@@ -8,7 +8,8 @@ import (
 	"testing"
 
 	"github.com/kaakaww/cypherhawk/internal/bundle"
-	"github.com/kaakaww/cypherhawk/testdata"
+	"github.com/kaakaww/cypherhawk/test/testdata"
+	testutils "github.com/kaakaww/cypherhawk/test/utils"
 )
 
 // TestCrossPlatformCompatibility verifies CypherHawk works across different operating systems
@@ -98,7 +99,7 @@ func TestFileSystemCompatibility(t *testing.T) {
 func TestEnvironmentVariables(t *testing.T) {
 	t.Run("EnvironmentVariableHandling", func(t *testing.T) {
 		// Clean proxy environment at start and restore at end
-		cleanup := clearProxyEnvironment(t)
+		cleanup := testutils.ClearProxyEnvironment(t)
 		defer cleanup()
 
 		// Test setting and reading environment variables
@@ -254,7 +255,7 @@ func testLinuxSpecificBehaviors(t *testing.T) {
 
 	// Test Linux proxy environment variable conventions
 	// Clean up proxy environment before and after test
-	cleanup := clearProxyEnvironment(t)
+	cleanup := testutils.ClearProxyEnvironment(t)
 	defer cleanup()
 
 	os.Setenv("http_proxy", "http://linux-proxy:3128")

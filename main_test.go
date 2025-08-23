@@ -21,6 +21,7 @@ import (
 	"github.com/kaakaww/cypherhawk/internal/network"
 	"github.com/kaakaww/cypherhawk/internal/output"
 	"github.com/kaakaww/cypherhawk/internal/security"
+	testutils "github.com/kaakaww/cypherhawk/test/utils"
 )
 
 // TestMozillaCATrustedCertificate tests that a certificate signed by a Mozilla CA is trusted
@@ -473,7 +474,7 @@ func TestEnhancedSecurityValidation(t *testing.T) {
 	t.Log("=== Testing Enhanced Security Validation Features ===")
 
 	// Clean proxy environment for network operations
-	cleanup := clearProxyEnvironment(t)
+	cleanup := testutils.ClearProxyEnvironment(t)
 	defer cleanup()
 
 	// Test 1: Certificate Transparency validation

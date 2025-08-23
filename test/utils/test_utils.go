@@ -1,12 +1,12 @@
-package main
+package testutils
 
 import (
 	"os"
 	"testing"
 )
 
-// clearProxyEnvironment clears all proxy environment variables to ensure clean network access
-func clearProxyEnvironment(t *testing.T) func() {
+// ClearProxyEnvironment clears all proxy environment variables to ensure clean network access
+func ClearProxyEnvironment(t *testing.T) func() {
 	// Store original values and whether they were set
 	type envVar struct {
 		value  string
@@ -51,7 +51,7 @@ func envVarExists(key string) bool {
 	return exists
 }
 
-// isNetworkTestSkipped returns true if network tests should be skipped
-func isNetworkTestSkipped() bool {
+// IsNetworkTestSkipped returns true if network tests should be skipped
+func IsNetworkTestSkipped() bool {
 	return os.Getenv("CYPHERHAWK_SKIP_NETWORK_TESTS") == "1"
 }

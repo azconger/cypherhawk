@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/kaakaww/cypherhawk/internal/output"
-	"github.com/kaakaww/cypherhawk/testdata"
+	"github.com/kaakaww/cypherhawk/test/testdata"
 )
 
 // TestHawkScanPEMCompatibility verifies that our PEM output works perfectly with HawkScan

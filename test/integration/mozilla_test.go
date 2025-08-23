@@ -4,18 +4,19 @@ import (
 	"testing"
 
 	"github.com/kaakaww/cypherhawk/internal/bundle"
+	testutils "github.com/kaakaww/cypherhawk/test/utils"
 )
 
 // TestMozillaCABundleDownload tests Mozilla CA bundle download with clean environment
 func TestMozillaCABundleDownload(t *testing.T) {
 	// This test verifies that Mozilla CA bundle download works when not in corporate network
 	// Skip if network tests are disabled
-	if isNetworkTestSkipped() {
+	if testutils.IsNetworkTestSkipped() {
 		t.Skip("Skipping network-dependent test in fast mode")
 	}
 
 	// Clear any proxy settings that might interfere from previous tests
-	cleanup := clearProxyEnvironment(t)
+	cleanup := testutils.ClearProxyEnvironment(t)
 	defer cleanup()
 
 	// Test Mozilla CA bundle download

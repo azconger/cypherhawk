@@ -13,7 +13,8 @@ import (
 	"time"
 
 	"github.com/kaakaww/cypherhawk/internal/network"
-	"github.com/kaakaww/cypherhawk/testdata"
+	"github.com/kaakaww/cypherhawk/test/testdata"
+	testutils "github.com/kaakaww/cypherhawk/test/utils"
 )
 
 // TestProxySupport verifies that CypherHawk works correctly with corporate proxies
@@ -68,7 +69,7 @@ func TestProxySupport(t *testing.T) {
 	defer proxyServer.Close()
 
 	// Test with proxy environment variables - use proper cleanup
-	cleanup := clearProxyEnvironment(t)
+	cleanup := testutils.ClearProxyEnvironment(t)
 	defer cleanup()
 
 	// Set proxy environment variables
@@ -440,7 +441,7 @@ func TestRealWorldNetworkConditions(t *testing.T) {
 func TestProxyAuthentication(t *testing.T) {
 	t.Run("ProxyAuthentication", func(t *testing.T) {
 		// Set up proxy environment variables with authentication required
-		cleanup := clearProxyEnvironment(t)
+		cleanup := testutils.ClearProxyEnvironment(t)
 		defer cleanup()
 
 		// Set invalid proxy credentials to trigger 407 error

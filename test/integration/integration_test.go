@@ -7,7 +7,7 @@ import (
 
 	"github.com/kaakaww/cypherhawk/internal/bundle"
 	"github.com/kaakaww/cypherhawk/internal/detection"
-	"github.com/kaakaww/cypherhawk/testdata"
+	"github.com/kaakaww/cypherhawk/test/testdata"
 )
 
 func TestDPIVendorDetectionIntegration(t *testing.T) {
