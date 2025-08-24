@@ -61,6 +61,9 @@ jobs:
           echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
         fi
 
+    - name: Update CA bundle
+      run: make update-ca-bundle
+
     - name: Run tests
       run: make test
 
