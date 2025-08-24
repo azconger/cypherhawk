@@ -73,8 +73,8 @@ dev: build
 	./$(BINARY_NAME) --help
 
 # Run tests (default - includes all important tests)
-test:
-	go test -v -count=1 -race -coverprofile=coverage.out ./...
+test: update-ca-bundle
+	go test -v -timeout=300s -count=1 -race -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 

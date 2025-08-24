@@ -62,7 +62,7 @@ jobs:
         fi
 
     - name: Run tests
-      run: go test -v ./...
+      run: make test
 
     - name: Build binary
       env:
