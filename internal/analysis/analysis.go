@@ -25,7 +25,7 @@ type TrustDiscrepancy struct {
 
 // ValidateChain validates the complete certificate chain against Mozilla roots
 // Returns CA certificates that indicate corporate DPI/proxy infrastructure
-// Only flags certificates when the complete chain cannot be validated through Mozilla roots
+// Only flags certificates when they are not trusted by Mozilla's CA bundle
 func ValidateChain(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostname string) []*x509.Certificate {
 	if len(certs) == 0 {
 		return nil
@@ -40,7 +40,7 @@ func ValidateChain(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostnam
 		intermediates.AddCert(certs[i])
 	}
 
-	// First, verify the certificate chain without hostname validation
+	// Try to verify the certificate chain without hostname validation first
 	// This separates certificate authority trust from hostname matching issues
 	chainOpts := x509.VerifyOptions{
 		Roots:         mozillaCAs,
@@ -55,17 +55,21 @@ func ValidateChain(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostnam
 		return nil
 	}
 
-	// Chain validation failed - look for root CAs that might be corporate DPI
-	var corporateCAs []*x509.Certificate
+	// Chain validation failed - examine each CA certificate individually
+	// This is more reliable than trying to determine "trust anchors"
+	var unknownCAs []*x509.Certificate
 
 	for _, cert := range certs {
-		// Only flag root CAs (self-signed certificates) that are acting as trust anchors
-		if cert.IsCA && isLikelyTrustAnchor(cert, certs) {
-			corporateCAs = append(corporateCAs, cert)
+		// Only examine CA certificates for DPI detection
+		if cert.IsCA {
+			// Check if this CA certificate is trusted by Mozilla
+			if !IsTrustedByMozilla(cert, mozillaCAs, certs) {
+				unknownCAs = append(unknownCAs, cert)
+			}
 		}
 	}
 
-	return corporateCAs
+	return unknownCAs
 }
 
 // isLikelyTrustAnchor determines if a certificate is likely acting as a trust anchor
@@ -171,7 +175,22 @@ func IsTrustedByMozilla(cert *x509.Certificate, mozillaCAs *x509.CertPool, allCe
 		return true // Skip non-CA certificates - we only care about CA certs
 	}
 
-	// Build intermediate certificate pool from the certificate chain
+	if mozillaCAs == nil {
+		return false // No Mozilla CA bundle available - can't verify
+	}
+
+	// For self-signed certificates, check if they're directly in Mozilla's CA bundle
+	if cert.Subject.String() == cert.Issuer.String() {
+		// Try to verify the certificate directly as a root CA
+		opts := x509.VerifyOptions{
+			Roots:     mozillaCAs,
+			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+		}
+		_, err := cert.Verify(opts)
+		return err == nil
+	}
+
+	// For intermediate CAs, build a chain to see if it can be verified through Mozilla roots
 	intermediates := x509.NewCertPool()
 	for _, c := range allCerts {
 		if c != cert && c.IsCA {
@@ -183,6 +202,7 @@ func IsTrustedByMozilla(cert *x509.Certificate, mozillaCAs *x509.CertPool, allCe
 	opts := x509.VerifyOptions{
 		Roots:         mozillaCAs,
 		Intermediates: intermediates,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
 
 	// Try to verify the certificate against Mozilla's CA bundle with full chain context

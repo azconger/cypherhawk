@@ -103,12 +103,12 @@ func TestTimeoutHandling(t *testing.T) {
 
 	// Test that GetCertificateChain handles timeouts
 	t.Run("TimeoutHandling", func(t *testing.T) {
-		// Use a non-routable IP address that will cause connection timeout
-		// 198.51.100.1 is a documentation IP that should not be routable
-		testURL := "https://198.51.100.1:443"
+		// Use a reserved test IP address that will cause connection timeout quickly
+		// 192.0.2.1 is TEST-NET-1 reserved for documentation/testing
+		testURL := "https://192.0.2.1:443"
 
 		start := time.Now()
-		_, err := network.GetCertificateChain(testURL)
+		_, err := network.GetCertificateChainWithConfig(testURL, network.FastNetworkConfig())
 		duration := time.Since(start)
 
 		// Should timeout and return error
@@ -117,15 +117,15 @@ func TestTimeoutHandling(t *testing.T) {
 			return // Exit early to prevent panic on err.Error()
 		}
 
-		// Should timeout within reasonable time (our dial timeout is 5 seconds per attempt + retry logic)
-		// With 3 attempts: 5s + 2s + 5s + 4s + 5s = ~21s max
-		if duration > 25*time.Second {
-			t.Errorf("Timeout took too long: %v (expected < 25s)", duration)
+		// Should timeout within reasonable time for testing
+		// Fast config: 2 retries, 3s timeout each, 1s delay = ~8s max
+		if duration > 10*time.Second {
+			t.Errorf("Timeout took too long: %v (expected < 10s)", duration)
 		}
 
-		// Should be reasonably fast (at least complete within first timeout)
-		if duration < 4*time.Second {
-			t.Errorf("Timeout happened too quickly: %v (expected at least 4s)", duration)
+		// Should take at least a few seconds to ensure proper timeout logic
+		if duration < 2*time.Second {
+			t.Errorf("Timeout happened too quickly: %v (expected at least 2s)", duration)
 		}
 
 		// Log the error for analysis but don't require specific error messages
@@ -145,10 +145,10 @@ func TestRetryLogic(t *testing.T) {
 	t.Run("RetryLogic", func(t *testing.T) {
 		// Use a non-routable IP address that will cause connection timeout
 		// This will trigger retry logic since timeouts are retryable
-		testURL := "https://198.51.100.2:443"
+		testURL := "https://192.0.2.2:443"
 
 		start := time.Now()
-		_, err := network.GetCertificateChain(testURL)
+		_, err := network.GetCertificateChainWithConfig(testURL, network.FastNetworkConfig())
 		duration := time.Since(start)
 
 		// Should fail after retries (all attempts will timeout)
@@ -158,17 +158,17 @@ func TestRetryLogic(t *testing.T) {
 		}
 
 		// Should have taken time for retries
-		// With 3 attempts and 5s dial timeout each: ~15s + retry delays (~6s) = ~21s total
-		if duration < 15*time.Second {
-			t.Errorf("Expected retry delays, completed too quickly: %v (expected ~21s)", duration)
+		// With fast config: 2 attempts, 3s timeout each, 1s delay = ~8s total
+		if duration < 4*time.Second {
+			t.Errorf("Expected retry delays, completed too quickly: %v (expected ~8s)", duration)
 		}
 
-		if duration > 30*time.Second {
-			t.Errorf("Retry took too long: %v (expected ~21s)", duration)
+		if duration > 12*time.Second {
+			t.Errorf("Retry took too long: %v (expected ~8s)", duration)
 		}
 
-		// Should mention "failed after 3 attempts" indicating retry happened
-		if !strings.Contains(err.Error(), "failed after 3 attempts") {
+		// Should mention "failed after 2 attempts" indicating retry happened
+		if !strings.Contains(err.Error(), "failed after 2 attempts") {
 			t.Errorf("Expected retry attempt message, got: %v", err)
 		}
 

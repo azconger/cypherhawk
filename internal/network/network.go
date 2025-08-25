@@ -15,11 +15,13 @@ import (
 // GetCertificateChain connects to an endpoint and extracts the certificate chain
 // with retry logic for corporate networks
 func GetCertificateChain(targetURL string) ([]*x509.Certificate, error) {
-	const maxRetries = 3
-	const baseDelay = 2 * time.Second
+	return GetCertificateChainWithConfig(targetURL, DefaultNetworkConfig())
+}
 
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		certs, err := getCertificateChainAttempt(targetURL)
+// GetCertificateChainWithConfig allows custom network configuration
+func GetCertificateChainWithConfig(targetURL string, config NetworkConfig) ([]*x509.Certificate, error) {
+	for attempt := 1; attempt <= config.MaxRetries; attempt++ {
+		certs, err := getCertificateChainAttemptWithConfig(targetURL, config)
 		if err == nil {
 			return certs, nil
 		}
@@ -30,20 +32,56 @@ func GetCertificateChain(targetURL string) ([]*x509.Certificate, error) {
 		}
 
 		// If this was the last attempt, return the error
-		if attempt == maxRetries {
-			return nil, fmt.Errorf("failed after %d attempts: %v", maxRetries, err)
+		if attempt == config.MaxRetries {
+			return nil, fmt.Errorf("failed after %d attempts: %v", config.MaxRetries, err)
 		}
 
 		// Wait before retrying with exponential backoff
-		delay := time.Duration(attempt) * baseDelay
+		delay := time.Duration(attempt) * config.BaseDelay
 		time.Sleep(delay)
 	}
 
 	return nil, fmt.Errorf("unexpected error in retry logic")
 }
 
-// getCertificateChainAttempt performs a single attempt to get certificates
+// NetworkConfig allows customization of network behavior
+type NetworkConfig struct {
+	MaxRetries          int
+	BaseDelay           time.Duration
+	ConnectTimeout      time.Duration
+	TLSHandshakeTimeout time.Duration
+	ClientTimeout       time.Duration
+}
+
+// DefaultNetworkConfig returns the default network configuration
+func DefaultNetworkConfig() NetworkConfig {
+	return NetworkConfig{
+		MaxRetries:          3,
+		BaseDelay:           2 * time.Second,
+		ConnectTimeout:      5 * time.Second,
+		TLSHandshakeTimeout: 5 * time.Second,
+		ClientTimeout:       10 * time.Second,
+	}
+}
+
+// FastNetworkConfig returns a configuration optimized for fast timeouts (useful for testing)
+func FastNetworkConfig() NetworkConfig {
+	return NetworkConfig{
+		MaxRetries:          2,
+		BaseDelay:           1 * time.Second,
+		ConnectTimeout:      2 * time.Second,
+		TLSHandshakeTimeout: 2 * time.Second,
+		ClientTimeout:       3 * time.Second,
+	}
+}
+
+// getCertificateChainAttempt performs a single attempt to get certificates with default config
 func getCertificateChainAttempt(targetURL string) ([]*x509.Certificate, error) {
+	return getCertificateChainAttemptWithConfig(targetURL, DefaultNetworkConfig())
+}
+
+// getCertificateChainAttemptWithConfig performs a single attempt to get certificates with custom config
+func getCertificateChainAttemptWithConfig(targetURL string, config NetworkConfig) ([]*x509.Certificate, error) {
 	// Create HTTP transport with corporate proxy support and proper timeouts
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
@@ -51,13 +89,13 @@ func getCertificateChainAttempt(targetURL string) ([]*x509.Certificate, error) {
 		},
 		// Set dial timeout to prevent hanging on non-routable IPs
 		DialContext: (&net.Dialer{
-			Timeout:   5 * time.Second,  // Connection timeout
-			KeepAlive: 30 * time.Second, // Keep alive for reuse
+			Timeout:   config.ConnectTimeout, // Connection timeout
+			KeepAlive: 30 * time.Second,      // Keep alive for reuse
 		}).DialContext,
 		// TLS handshake timeout
-		TLSHandshakeTimeout: 5 * time.Second,
+		TLSHandshakeTimeout: config.TLSHandshakeTimeout,
 		// Response header timeout
-		ResponseHeaderTimeout: 10 * time.Second,
+		ResponseHeaderTimeout: config.ClientTimeout,
 	}
 
 	// Configure HTTP proxy support from environment variables
@@ -67,7 +105,7 @@ func getCertificateChainAttempt(targetURL string) ([]*x509.Certificate, error) {
 
 	client := &http.Client{
 		Transport: tr,
-		Timeout:   10 * time.Second, // Fast timeout for better user experience
+		Timeout:   config.ClientTimeout,
 	}
 
 	resp, err := client.Get(targetURL)

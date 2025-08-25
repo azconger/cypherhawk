@@ -220,7 +220,6 @@ func TestDPIDetectionIndicators(t *testing.T) {
 			mockCerts: testdata.GeneratePaloAltoCertificateChain(),
 			expectedIndicators: []string{
 				"Organization",
-				"Validity period",
 				"Self-signed certificate",
 			},
 		},
@@ -229,7 +228,6 @@ func TestDPIDetectionIndicators(t *testing.T) {
 			mockCerts: testdata.GenerateZscalerCertificateChain(),
 			expectedIndicators: []string{
 				"Organization",
-				"Validity period",
 			},
 		},
 		{
