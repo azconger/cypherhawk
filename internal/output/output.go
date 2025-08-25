@@ -31,12 +31,14 @@ func GeneratePEM(certs []*x509.Certificate) string {
 	output.WriteString("# Usage with HawkScan:\n")
 	output.WriteString("#   hawk scan --ca-bundle this-file.pem\n")
 	output.WriteString("#\n")
-	output.WriteString("# These certificates were detected in TLS connections but are not\n")
-	output.WriteString("# in Mozilla's trusted CA bundle, indicating corporate DPI/MitM infrastructure\n")
+	output.WriteString("# These CA certificates are NOT in Mozilla's trusted CA bundle but were\n")
+	output.WriteString("# found in TLS connections. This indicates corporate DPI/proxy infrastructure.\n")
+	output.WriteString("# They may be trusted by your OS but HawkScan needs them explicitly.\n")
 	output.WriteString("#\n")
 
 	if len(certs) == 0 {
-		output.WriteString("# No unknown CA certificates detected\n")
+		output.WriteString("# No corporate/DPI CA certificates detected\n")
+		output.WriteString("# All certificates validate against Mozilla's CA bundle\n")
 		return output.String()
 	}
 

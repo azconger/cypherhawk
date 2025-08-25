@@ -279,8 +279,10 @@ func showCustomHelp() {
 
 DESCRIPTION:
     CypherHawk detects corporate Deep Packet Inspection (DPI) firewalls and 
-    man-in-the-middle proxies, then extracts their CA certificates for use 
-    with Java applications and security tools like HawkScan.
+    man-in-the-middle proxies by finding CA certificates that are not in 
+    Mozilla's trusted CA bundle. It extracts these certificates for use with 
+    Java applications and security tools like HawkScan, regardless of whether 
+    they are installed in your OS trust store.
 
 USAGE:
     cypherhawk [options] [-url <target>] [-o <output-file>]
@@ -321,6 +323,9 @@ HAWKSCAN INTEGRATION EXAMPLES:
     4. Use JKS with HawkScan:
         hawk scan -Djavax.net.ssl.trustStore=corporate.jks \
                   -Djavax.net.ssl.trustStorePassword=changeit
+
+    Note: CypherHawk finds corporate CAs that browsers trust (via OS trust store) 
+    but Java/HawkScan don't recognize without explicit configuration.
 
 COMMON WORKFLOWS:
 
@@ -467,20 +472,25 @@ func main() {
 
 		// Report trust discrepancies if verbose (key diagnostic info for support)
 		if isVerbose() && len(securityIssues.TrustDiscrepancies) > 0 {
-			printInfo("Trust store analysis for %s:\n", endpoint)
+			printInfo("Trust validation results for %s:\n", endpoint)
 			for _, discrepancy := range securityIssues.TrustDiscrepancies {
-				osStatus := "Not Trusted"
+				osStatus := "✗ NOT TRUSTED"
 				if discrepancy.TrustedByOS {
-					osStatus = "Trusted"
+					osStatus = "✓ TRUSTED"
 				}
-				mozillaStatus := "Not Trusted"
+				mozillaStatus := "✗ NOT TRUSTED"
 				if discrepancy.TrustedByMozilla {
-					mozillaStatus = "Trusted"
+					mozillaStatus = "✓ TRUSTED"
 				}
 
-				printInfo("  [CERT] %s: OS=%s, Mozilla=%s\n",
-					discrepancy.Certificate.Subject.CommonName, osStatus, mozillaStatus)
-				printInfo("         Note: %s\n", discrepancy.Explanation)
+				printInfo("  Certificate: %s\n", discrepancy.Certificate.Subject.CommonName)
+				printInfo("    OS Trust Store:      %s\n", osStatus)
+				printInfo("    Mozilla Bundle:      %s\n", mozillaStatus)
+				printInfo("    Analysis: %s\n", discrepancy.Explanation)
+				if discrepancy.TrustedByOS && !discrepancy.TrustedByMozilla {
+					printInfo("    → Will be included in PEM output for HawkScan\n")
+				}
+				printInfo("\n")
 			}
 		}
 
@@ -490,7 +500,8 @@ func main() {
 			if !output.ContainsCertificate(unknownCerts, cert) {
 				unknownCerts = append(unknownCerts, cert)
 				if isVerbose() {
-					printInfo("Found unknown CA: %s\n", cert.Subject.CommonName)
+					printInfo("Corporate CA detected: %s (not in Mozilla bundle → flagged for HawkScan)\n",
+						cert.Subject.CommonName)
 				}
 			}
 		}

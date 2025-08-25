@@ -23,15 +23,16 @@ type TrustDiscrepancy struct {
 	Explanation      string
 }
 
-// ValidateChain validates the complete certificate chain like a browser would
-// Returns only CA certificates that indicate a potential MITM/DPI proxy
+// ValidateChain validates the complete certificate chain against Mozilla roots
+// Returns CA certificates that indicate corporate DPI/proxy infrastructure
+// Only flags certificates when the complete chain cannot be validated through Mozilla roots
 func ValidateChain(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostname string) []*x509.Certificate {
 	if len(certs) == 0 {
 		return nil
 	}
 
-	// The first certificate should be the leaf certificate (server certificate)
-	leafCert := certs[0]
+	// First, try to validate the complete certificate chain against Mozilla roots
+	leafCert := certs[0] // First certificate should be the leaf certificate
 
 	// Build intermediate certificate pool from the remaining certificates
 	intermediates := x509.NewCertPool()
@@ -39,33 +40,53 @@ func ValidateChain(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostnam
 		intermediates.AddCert(certs[i])
 	}
 
-	// Verify the complete certificate chain like a browser would
-	opts := x509.VerifyOptions{
+	// First, verify the certificate chain without hostname validation
+	// This separates certificate authority trust from hostname matching issues
+	chainOpts := x509.VerifyOptions{
 		Roots:         mozillaCAs,
 		Intermediates: intermediates,
-		DNSName:       extractHostname(hostname),
+		// DNSName omitted - we only care about chain validity, not hostname matching
 	}
 
-	// Try to verify the leaf certificate against the complete chain
-	_, err := leafCert.Verify(opts)
-
-	if err == nil {
-		// Chain verification succeeded - this is normal, trusted certificate behavior
-		// No MITM/DPI proxy detected
+	_, chainErr := leafCert.Verify(chainOpts)
+	if chainErr == nil {
+		// Chain validates successfully through Mozilla roots
+		// This means the certificate is issued by trusted CAs, not corporate DPI
 		return nil
 	}
 
-	// Chain verification failed - this could indicate MITM/DPI proxy
-	// Return only the CA certificates that are likely from a corporate DPI proxy
-	var untrustedCAs []*x509.Certificate
+	// Chain validation failed - look for root CAs that might be corporate DPI
+	var corporateCAs []*x509.Certificate
 
 	for _, cert := range certs {
-		if cert.IsCA && IsPotentialDPICA(cert) {
-			untrustedCAs = append(untrustedCAs, cert)
+		// Only flag root CAs (self-signed certificates) that are acting as trust anchors
+		if cert.IsCA && isLikelyTrustAnchor(cert, certs) {
+			corporateCAs = append(corporateCAs, cert)
 		}
 	}
 
-	return untrustedCAs
+	return corporateCAs
+}
+
+// isLikelyTrustAnchor determines if a certificate is likely acting as a trust anchor
+// (either self-signed or the highest CA in the presented chain)
+func isLikelyTrustAnchor(cert *x509.Certificate, allCerts []*x509.Certificate) bool {
+	// Self-signed certificates are definitely trust anchors
+	if cert.Subject.String() == cert.Issuer.String() {
+		return true
+	}
+
+	// Check if this certificate's issuer is present in the chain
+	// If not, it's likely the highest CA in the chain (acting as trust anchor)
+	for _, otherCert := range allCerts {
+		if otherCert != cert && otherCert.Subject.String() == cert.Issuer.String() {
+			// Found the issuer in the chain - this is an intermediate, not a trust anchor
+			return false
+		}
+	}
+
+	// No issuer found in chain - this is likely the trust anchor
+	return true
 }
 
 // IsPotentialDPICA checks if a CA certificate appears to be from a corporate DPI proxy
@@ -142,10 +163,10 @@ func IsPotentialDPICA(cert *x509.Certificate) bool {
 	return true
 }
 
-// IsTrustedCA checks if a certificate can be verified through Mozilla's trusted CA bundle
-// This function is kept for test compatibility
-func IsTrustedCA(cert *x509.Certificate, mozillaCAs *x509.CertPool, allCerts []*x509.Certificate) bool {
-	// Only examine CA certificates for unknown detection
+// IsTrustedByMozilla checks if a certificate can be verified through Mozilla's trusted CA bundle
+// This is the primary function for determining if a CA should be included in HawkScan output
+func IsTrustedByMozilla(cert *x509.Certificate, mozillaCAs *x509.CertPool, allCerts []*x509.Certificate) bool {
+	// Only examine CA certificates for corporate/DPI detection
 	if !cert.IsCA {
 		return true // Skip non-CA certificates - we only care about CA certs
 	}
@@ -167,9 +188,14 @@ func IsTrustedCA(cert *x509.Certificate, mozillaCAs *x509.CertPool, allCerts []*
 	// Try to verify the certificate against Mozilla's CA bundle with full chain context
 	_, err := cert.Verify(opts)
 
-	// If verification succeeds, this CA is part of a trusted chain
-	// If verification fails, it's an unknown/untrusted CA (potential DPI)
+	// If verification succeeds, this CA is part of Mozilla's trusted chain
+	// If verification fails, it's a corporate/DPI CA that HawkScan needs
 	return err == nil
+}
+
+// IsTrustedCA is kept for backward compatibility with existing tests
+func IsTrustedCA(cert *x509.Certificate, mozillaCAs *x509.CertPool, allCerts []*x509.Certificate) bool {
+	return IsTrustedByMozilla(cert, mozillaCAs, allCerts)
 }
 
 // extractHostname extracts hostname from URL for certificate validation
@@ -342,9 +368,9 @@ func CompareTrustStores(certs []*x509.Certificate, mozillaCAs *x509.CertPool, ho
 		}
 
 		if trustedByOS && !trustedByMozilla {
-			discrepancy.Explanation = "OS trusts this certificate chain (Postman/browsers work) but Mozilla doesn't (Java apps fail)"
+			discrepancy.Explanation = "CORPORATE DPI DETECTED: OS trusts this chain (browsers work) but Mozilla doesn't (Java/HawkScan need PEM file)"
 		} else if !trustedByOS && trustedByMozilla {
-			discrepancy.Explanation = "Mozilla trusts this certificate chain but OS doesn't (unusual configuration)"
+			discrepancy.Explanation = "Mozilla trusts this certificate chain but OS doesn't (unusual configuration - verify OS trust store)"
 		}
 
 		discrepancies = append(discrepancies, discrepancy)

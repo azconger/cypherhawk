@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/kaakaww/cypherhawk/internal/analysis"
 )
 
 // DetectionResult contains comprehensive analysis results for a certificate chain
@@ -34,8 +36,8 @@ func AnalyzeCertificateChain(url string, certs []*x509.Certificate, mozillaCAs *
 		return result
 	}
 
-	// Check if the certificate chain is unknown to Mozilla bundle
-	unknownCerts := findUnknownCAs(certs, mozillaCAs)
+	// Use the same certificate validation logic as the main analysis
+	unknownCerts := analysis.ValidateChain(certs, mozillaCAs, url)
 	result.UnknownCAs = unknownCerts
 
 	// Only analyze vendor patterns if we found unknown CAs
