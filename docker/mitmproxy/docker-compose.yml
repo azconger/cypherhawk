@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  mitmproxy:
+    image: mitmproxy/mitmproxy:latest
+    container_name: cypherhawk-mitmproxy
+    ports:
+      - "8080:8080"   # HTTP proxy port
+      - "8081:8081"   # Web interface
+    volumes:
+      - ./certs:/home/mitmproxy/.mitmproxy
+      - ./config:/home/mitmproxy/.config
+      - ./scripts:/scripts
+    environment:
+      - MITM_WEB_HOST=0.0.0.0
+      - MITM_WEB_PORT=8081
+    command: >
+      mitmweb 
+      --web-host 0.0.0.0 
+      --web-port 8081
+      --listen-host 0.0.0.0
+      --listen-port 8080
+      --set confdir=/home/mitmproxy/.config
+      --set web_open_browser=false
+    restart: unless-stopped
+    networks:
+      - dpi-test
+
+  # Optional: Generate custom corporate CA certificates
+  cert-generator:
+    build: 
+      context: .
+      dockerfile: Dockerfile.cert-generator
+    container_name: cypherhawk-cert-gen
+    volumes:
+      - ./certs:/output
+    profiles:
+      - tools
+    networks:
+      - dpi-test
+
+networks:
+  dpi-test:
+    driver: bridge

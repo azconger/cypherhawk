@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  squid-dpi:
+    build:
+      context: .
+      dockerfile: Dockerfile.squid
+    container_name: cypherhawk-squid-dpi
+    ports:
+      - "3128:3128"   # HTTP/HTTPS proxy port
+      - "3129:3129"   # HTTPS intercept port
+    volumes:
+      - ./config:/etc/squid
+      - ./certs:/etc/squid/certs
+      - ./ssl_db:/var/lib/squid/ssl_db
+      - ./logs:/var/log/squid
+    environment:
+      - SQUID_SSL_BUMP=true
+      - SQUID_LOG_LEVEL=2
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv4.ip_forward=1
+    restart: unless-stopped
+    networks:
+      - dpi-test
+
+  # Certificate generator for Squid
+  squid-cert-gen:
+    image: alpine:latest
+    container_name: cypherhawk-squid-cert-gen
+    volumes:
+      - ./certs:/certs
+      - ./scripts:/scripts
+    working_dir: /scripts
+    command: sh -c "chmod +x ./generate-squid-certs.sh && ./generate-squid-certs.sh"
+    profiles:
+      - tools
+    networks:
+      - dpi-test
+
+networks:
+  dpi-test:
+    driver: bridge

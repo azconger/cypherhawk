@@ -1,0 +1,29 @@
+FROM ubuntu:22.04
+
+# Install Squid and OpenSSL
+RUN apt-get update && apt-get install -y \
+    squid \
+    squid-openssl \
+    openssl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create necessary directories
+RUN mkdir -p /var/lib/squid/ssl_db \
+    && mkdir -p /etc/squid/certs \
+    && mkdir -p /var/log/squid
+
+# Set permissions
+RUN chown -R proxy:proxy /var/lib/squid \
+    && chown -R proxy:proxy /etc/squid/certs \
+    && chown -R proxy:proxy /var/log/squid
+
+# Copy startup script
+COPY startup.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/startup.sh
+
+# Expose ports
+EXPOSE 3128 3129
+
+# Use custom startup script
+CMD ["/usr/local/bin/startup.sh"]

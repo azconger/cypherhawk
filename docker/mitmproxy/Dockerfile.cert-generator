@@ -1,0 +1,14 @@
+FROM alpine:latest
+
+RUN apk add --no-cache openssl
+
+WORKDIR /cert-gen
+
+# Copy certificate generation script
+COPY generate-corporate-ca.sh /cert-gen/
+
+# Make script executable
+RUN chmod +x generate-corporate-ca.sh
+
+# Default command generates certificates
+CMD ["./generate-corporate-ca.sh"]
