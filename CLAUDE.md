@@ -6,7 +6,7 @@ Production-ready CLI utility that detects corporate Deep Packet Inspection (DPI)
 
 Built by StackHawk but designed for the broader Java ecosystem including Maven, Gradle, Spring Boot applications, and security tools like HawkScan.
 
-## Current Status: Phase 3 Complete ✅
+## Current Status: Phase 3+ Complete ✅
 
 **✅ Phase 1-3 COMPLETED Features:**
 - Core DPI detection with Mozilla CA bundle validation
@@ -18,10 +18,17 @@ Built by StackHawk but designed for the broader Java ecosystem including Maven, 
 - Network condition testing and proxy environment cleanup
 - HawkScan integration optimization
 
-**🚧 Current Focus:**
-- Comprehensive HawkScan integration documentation
-- Usage examples and common workflow guidance
-- Production deployment optimization
+**✅ Phase 3+ ADDITIONAL COMPLETED Features:**
+- Complete DPI testing infrastructure for development and validation
+- Cross-platform DPI testing environment (Windows, macOS, Linux)
+- Automated validation scripts with comprehensive cleanup
+- Multiple DPI simulation approaches (standalone, mitmproxy, Squid)
+- Platform-specific documentation and troubleshooting guides
+
+**🎯 Current Status:**
+- Production-ready with comprehensive testing infrastructure
+- Ready for advanced features and enhanced detection modes
+- Complete cross-platform DPI testing capability established
 
 ## Project Type
 - **Language:** Go (zero external dependencies)
@@ -88,6 +95,7 @@ make clean          # Clean build artifacts
 - **Risk scoring system** - Combines multiple security indicators for high-confidence detection
 - **Flexible target URLs** - Supports custom target URLs via `-url` flag (default: 4 endpoints)
 - **PEM extraction** - Outputs unknown CA certificates in standard PEM format
+- **Complete DPI testing infrastructure** - Standalone server, mitmproxy, and Squid setups with cross-platform validation scripts
 
 ## Project Structure
 
@@ -107,8 +115,21 @@ cypherhawk/
 │   │   └── network.go     # Certificate retrieval, retry logic, proxy support
 │   └── output/            # Output generation (~85 lines)
 │       └── output.go      # HawkScan-optimized PEM formatting and deduplication
-├── scripts/              # Build and automation scripts
-│   └── update-ca-bundle.sh # Downloads latest Mozilla CA bundle at build time (~140 lines)
+├── cmd/
+│   └── dpi-test-server/    # DPI simulation server for testing
+│       └── main.go         # Standalone HTTPS server with 5 corporate DPI profiles (~200 lines)
+├── scripts/              # Build and automation scripts  
+│   ├── update-ca-bundle.sh # Downloads latest Mozilla CA bundle at build time (~140 lines)
+│   ├── validate-dpi-setup.sh # Linux/macOS DPI testing validation script (~325 lines)
+│   ├── validate-dpi-setup.ps1 # Windows PowerShell DPI testing validation script (~325 lines)
+│   └── README.md           # Validation script documentation and usage guide
+├── docker/               # DPI testing environments
+│   ├── mitmproxy/         # Professional proxy with SSL interception
+│   │   ├── docker-compose.yml # mitmproxy container configuration
+│   │   └── generate-corporate-ca.sh # Corporate CA generation for mitmproxy
+│   └── squid/             # Enterprise-grade proxy with SSL bumping
+│       ├── docker-compose.yml # Squid proxy container configuration
+│       └── scripts/generate-squid-certs.sh # Corporate CA generation for Squid (~175 lines)
 ├── testdata/              # Test data and mock certificate generation
 │   └── testdata.go        # Mock DPI certificate chains for 6+ vendors (~300 lines)
 ├── main_test.go           # Comprehensive security validation tests (~640 lines)
@@ -120,7 +141,9 @@ cypherhawk/
 ├── go.mod                 # Go module definition (github.com/kaakaww/cypherhawk)
 ├── go.sum                 # Go module checksums
 ├── CLAUDE.md              # Context file for Claude Code
-├── README.md              # User documentation and usage examples
+├── README.md              # User documentation and usage examples  
+├── WINDOWS-DPI-TESTING.md # Windows-specific DPI testing setup guide (~311 lines)
+├── MACOS-DPI-TESTING.md   # macOS-specific DPI testing setup guide (~315 lines)
 └── .github/workflows/build.yml  # Automated testing and release building with fresh CA bundles
 ```
 
@@ -134,7 +157,14 @@ cypherhawk/
 | `internal/security/` | Advanced security features - Certificate Transparency validation, behavioral analysis, CA impersonation detection |
 | `internal/network/` | Network operations - TLS certificate retrieval, retry logic, proxy support, enhanced error handling |
 | `internal/output/` | Output generation - HawkScan-optimized PEM formatting, certificate deduplication |
+| `cmd/dpi-test-server/` | DPI simulation server - standalone HTTPS server with 5 corporate DPI profiles for testing |
 | `scripts/update-ca-bundle.sh` | Build-time script that downloads latest Mozilla CA bundle to prevent stale embedded certificates |
+| `scripts/validate-dpi-setup.sh` | Linux/macOS DPI testing validation script - automated testing with comprehensive cleanup |
+| `scripts/validate-dpi-setup.ps1` | Windows PowerShell DPI testing validation script - automated testing with comprehensive cleanup |
+| `docker/mitmproxy/` | Professional proxy setup - SSL interception with corporate CA generation |
+| `docker/squid/` | Enterprise-grade proxy setup - SSL bumping with corporate CA generation |
+| `WINDOWS-DPI-TESTING.md` | Windows-specific DPI testing setup guide with detailed troubleshooting |
+| `MACOS-DPI-TESTING.md` | macOS-specific DPI testing setup guide with Keychain Access and networksetup instructions |
 | `testdata/testdata.go` | Mock certificate generation for 6+ DPI vendors - realistic test data for comprehensive validation |
 | `main_test.go` | Core security validation tests with mock DPI environments and advanced threat detection |
 | `cross_platform_test.go` | Cross-platform compatibility tests for Windows, macOS, Linux |
@@ -298,7 +328,7 @@ When using `--verbose`, the tool provides detailed security analysis including:
 9. ✅ **Network reliability improvements** - Retry logic, timeout optimization (10s), proxy environment cleanup
 10. ✅ **HawkScan integration optimization** - Custom help system, optimized PEM output, integration examples
 
-**Phase 4 - Enhanced Modes & Use Cases:**
+**Phase 4 - Enhanced Modes & Use Cases (Future):**
 1. **Detection modes** - Multiple operating modes for different scenarios:
    - `--mode corporate` (current behavior) - Extract corporate DPI certificates
    - `--mode paranoid` - Alert on ANY unknown certificates (untrusted networks)
@@ -313,7 +343,7 @@ When using `--verbose`, the tool provides detailed security analysis including:
    - System-wide HTTPS connection monitoring
    - Webhook/API alerting for security teams
 
-**Phase 5 - Advanced Security Features:**
+**Phase 5 - Advanced Security Features (Future):**
 1. **Threat intelligence integration** - Enhanced detection capabilities:
    - Direct Certificate Transparency log queries for recent certificates
    - Malicious CA database integration (known-compromised authorities)
@@ -327,7 +357,7 @@ When using `--verbose`, the tool provides detailed security analysis including:
    - Forensic reporting for security investigations
    - Risk scoring algorithms for MITM probability assessment
 
-**Phase 6 - Integration & Usability:**
+**Phase 6 - Integration & Usability (Future):**
 1. **Platform integrations** - Broader ecosystem support:
    - Browser extension for real-time certificate warnings
    - SIEM integration via REST APIs and webhooks
@@ -352,14 +382,17 @@ When modifying this project, common tasks include:
 5. **HawkScan integration** - Optimizing PEM format compatibility and usage examples
 6. **Network reliability** - Enhancing corporate network detection and error guidance
 7. **Cross-platform support** - Ensuring compatibility across Windows, macOS, Linux environments
+8. **DPI testing infrastructure** - Expanding validation scripts and mock DPI environments
 
 ## Target Audience
 
-### **Current Primary Users (Phase 1-3)**
+### **Current Primary Users (Phase 1-3+)**
 - **Java developers** dealing with corporate environments
 - **StackHawk users** evaluating the scanner in corporate environments
-- **DevOps/SRE teams** dealing with corporate security infrastructure
+- **DevOps/SRE teams** dealing with corporate security infrastructure  
 - **Security teams** who need to configure certificate trust for Java applications
+- **Security researchers** testing DPI detection capabilities in controlled environments
+- **Developers** building and testing certificate validation tools
 
 ### **Potential Expanded Users (Phase 4-6)**
 - **General users** on untrusted networks (coffee shops, airports, hotels, public WiFi)
