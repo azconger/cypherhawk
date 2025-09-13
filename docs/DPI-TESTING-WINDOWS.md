@@ -1,5 +1,7 @@
 # Windows DPI Testing Guide for CypherHawk
 
+> **Other Platforms:** [macOS Guide](DPI-TESTING-MACOS.md) | [Linux Guide](DPI-TESTING-LINUX.md) | [Overview](DPI-TESTING.md)
+
 This guide shows you how to set up a realistic DPI testing environment on Windows to validate CypherHawk's detection capabilities. You'll simulate corporate DPI/proxy behavior without needing expensive enterprise solutions.
 
 ## 🎯 Overview
@@ -260,22 +262,147 @@ openssl s_client -connect www.google.com:443 -proxy 127.0.0.1:8080
 - **Legal Compliance**: Only intercept your own traffic
 - **Certificate Validation**: Never install unknown CA certificates permanently
 
-### Cleanup Checklist
+### 🧹 Complete Cleanup Guide
 
-```cmd
-# 1. Remove proxy settings
-netsh winhttp reset proxy
+**⚠️ CRITICAL:** Failure to properly remove test certificates can leave your system vulnerable to MitM attacks. Follow all steps carefully.
 
-# 2. Remove CA certificates
-certlm.msc
-# Delete corporate CAs from "Trusted Root Certification Authorities"
+#### Step 1: Stop All Test Services
 
-# 3. Stop Docker containers  
-docker-compose down
+```powershell
+# Stop Docker containers
+docker-compose down --remove-orphans
 docker system prune -f
 
-# 4. Restart browser
-# Clear browser cache and restart to ensure no cached certificates
+# Kill any running DPI test servers
+taskkill /f /im dpi-test-server.exe 2>$null
+```
+
+#### Step 2: Remove Proxy Configuration
+
+```powershell
+# Reset system proxy (run as Administrator)
+netsh winhttp reset proxy
+netsh winhttp reset tracing
+
+# Reset Internet Explorer proxy settings
+reg delete "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings" /v ProxyServer /f 2>$null
+reg delete "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings" /v ProxyEnable /f 2>$null
+```
+
+#### Step 3: Remove Test CA Certificates (SAFE CLI METHOD)
+
+**Option A: PowerShell Certificate Removal (Recommended)**
+
+```powershell
+# Open PowerShell as Administrator and run:
+
+# List test certificates to identify them
+Get-ChildItem -Path Cert:\LocalMachine\Root | Where-Object {
+    $_.Subject -like "*Test*" -or 
+    $_.Subject -like "*Corporate*" -or 
+    $_.Subject -like "*Acme*" -or
+    $_.Subject -like "*DPI*" -or
+    $_.Issuer -eq $_.Subject  # Self-signed certificates
+} | Format-Table Subject, Thumbprint, NotAfter
+
+# Remove specific test certificates by thumbprint (SAFE - only removes what you specify)
+# Replace THUMBPRINT with the actual thumbprint from the list above
+$thumbprint = "REPLACE_WITH_ACTUAL_THUMBPRINT"
+if ($thumbprint -ne "REPLACE_WITH_ACTUAL_THUMBPRINT") {
+    Get-ChildItem -Path Cert:\LocalMachine\Root\$thumbprint | Remove-Item -Confirm
+}
+
+# Alternative: Remove by subject pattern (use with CAUTION)
+Get-ChildItem -Path Cert:\LocalMachine\Root | Where-Object {
+    $_.Subject -like "*Acme Corporate Security*" -or
+    $_.Subject -like "*Test-CA-localhost*" -or
+    $_.Subject -like "*Palo Alto Networks Enterprise Root CA*"
+} | Remove-Item -Confirm
+```
+
+**Option B: Certificate Manager GUI (Visual Verification)**
+
+```powershell
+# Open Certificate Manager
+certlm.msc
+
+# Navigate to: Trusted Root Certification Authorities > Certificates
+# Look for certificates with these characteristics:
+#   - Issued To: "Acme Corporate Security CA", "Test-CA-localhost", etc.
+#   - Issued By: Same as "Issued To" (self-signed)
+#   - Valid from: Recent date (today)
+# Right-click suspicious certificates and select "Delete"
+```
+
+#### Step 4: Remove User Certificate Store (Additional Safety)
+
+```powershell
+# Check and remove from Current User store as well
+Get-ChildItem -Path Cert:\CurrentUser\Root | Where-Object {
+    $_.Subject -like "*Test*" -or 
+    $_.Subject -like "*Corporate*" -or 
+    $_.Subject -like "*Acme*" -or
+    $_.Subject -like "*DPI*"
+} | Remove-Item -Confirm
+
+# Also check Intermediate Certification Authorities
+Get-ChildItem -Path Cert:\LocalMachine\CA | Where-Object {
+    $_.Subject -like "*Test*" -or $_.Subject -like "*Corporate*"
+} | Remove-Item -Confirm
+```
+
+#### Step 5: Clear Browser Certificate Caches
+
+```powershell
+# Chrome/Edge - Clear certificate cache
+Get-Process chrome,msedge -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Firefox - Clear certificate cache  
+Get-Process firefox -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Clear Windows certificate cache
+certlm.msc
+# In Certificate Manager, go to Action > All Tasks > Clear SSL State
+```
+
+#### Step 6: Verification
+
+```powershell
+# Verify all test certificates are removed
+$testCerts = Get-ChildItem -Path Cert:\LocalMachine\Root | Where-Object {
+    $_.Subject -like "*Test*" -or 
+    $_.Subject -like "*Corporate*" -or 
+    $_.Subject -like "*Acme*" -or
+    $_.Subject -like "*DPI*"
+}
+
+if ($testCerts.Count -eq 0) {
+    Write-Host "✅ All test certificates successfully removed" -ForegroundColor Green
+} else {
+    Write-Host "⚠️ WARNING: Test certificates still present:" -ForegroundColor Yellow
+    $testCerts | Format-Table Subject, Thumbprint
+}
+
+# Test normal HTTPS connection
+Test-NetConnection google.com -Port 443 -InformationLevel Detailed
+```
+
+#### 🚨 Emergency Certificate Cleanup
+
+If you accidentally installed malicious certificates or need to reset everything:
+
+```powershell
+# NUCLEAR OPTION: Reset all certificates (run as Administrator)
+# WARNING: This removes ALL non-Windows certificates, including legitimate ones
+# Only use if you understand the consequences
+
+# Backup current certificates first
+Export-Certificate -Cert (Get-ChildItem -Path Cert:\LocalMachine\Root) -FilePath C:\temp\cert_backup.zip
+
+# Clear certificate stores (DANGEROUS - use only in emergencies)
+# Get-ChildItem -Path Cert:\LocalMachine\Root | Where-Object { $_.Subject -notlike "*Microsoft*" -and $_.Subject -notlike "*Windows*" } | Remove-Item -Force
+
+# After this, you may need to reinstall legitimate CA certificates
 ```
 
 ## 🎓 Educational Value

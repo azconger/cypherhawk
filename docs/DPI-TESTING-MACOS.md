@@ -1,5 +1,7 @@
 # macOS DPI Testing Guide for CypherHawk
 
+> **Other Platforms:** [Windows Guide](DPI-TESTING-WINDOWS.md) | [Linux Guide](DPI-TESTING-LINUX.md) | [Overview](DPI-TESTING.md)
+
 This guide shows you how to set up a realistic DPI testing environment on macOS to validate CypherHawk's detection capabilities. You'll simulate corporate DPI/proxy behavior without needing expensive enterprise solutions.
 
 ## 🎯 Overview
@@ -420,30 +422,219 @@ sudo networksetup -setwebproxy "Wi-Fi" 127.0.0.1 8080
 - **Legal Compliance**: Only intercept your own traffic
 - **Certificate Validation**: Never install unknown CA certificates permanently
 
-### Cleanup Checklist
+### 🧹 Complete Cleanup Guide
+
+**⚠️ CRITICAL:** Failure to properly remove test certificates can leave your system vulnerable to MitM attacks. Follow all steps carefully.
+
+#### Step 1: Stop All Test Services
 
 ```bash
-# 1. Remove proxy settings
-sudo networksetup -setwebproxystate "Wi-Fi" off
-sudo networksetup -setsecurewebproxystate "Wi-Fi" off
-
-# 2. Remove CA certificates via Keychain Access
-# - Open Keychain Access
-# - Select System keychain
-# - Find corporate CA certificates
-# - Delete them (requires admin password)
-
-# 3. Stop Docker containers  
-cd docker/mitmproxy && docker-compose down
-cd docker/squid && docker-compose down
+# Stop Docker containers
+cd docker/mitmproxy && docker-compose down --remove-orphans 2>/dev/null
+cd docker/squid && docker-compose down --remove-orphans 2>/dev/null
+cd ../.. # Return to project root
 docker system prune -f
 
-# 4. Restart browsers
-# - Quit and restart all browsers to clear cached certificates
-# - Clear browser certificate cache if available
+# Kill any running DPI test servers
+pkill -f dpi-test-server 2>/dev/null || true
+```
 
-# 5. Automated cleanup
-./scripts/validate-dpi-setup.sh --cleanup
+#### Step 2: Remove Proxy Configuration
+
+```bash
+# Reset network proxy settings for all network interfaces
+for interface in $(networksetup -listallnetworkservices | grep -v "An asterisk" | grep -v "services"); do
+    echo "Clearing proxy for interface: $interface"
+    sudo networksetup -setwebproxystate "$interface" off 2>/dev/null || true
+    sudo networksetup -setsecurewebproxystate "$interface" off 2>/dev/null || true
+    sudo networksetup -setftpproxystate "$interface" off 2>/dev/null || true
+    sudo networksetup -setsocksfirewallproxystate "$interface" off 2>/dev/null || true
+done
+
+# Clear system proxy environment variables
+unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy ALL_PROXY all_proxy
+```
+
+#### Step 3: Remove Test CA Certificates (SAFE CLI METHOD)
+
+**Option A: Command Line Certificate Removal (Recommended)**
+
+```bash
+# List all certificates in system keychain to identify test certificates
+echo "🔍 Scanning for test certificates..."
+security find-certificate -a -c "Test" /Library/Keychains/System.keychain 2>/dev/null || true
+security find-certificate -a -c "Corporate" /Library/Keychains/System.keychain 2>/dev/null || true  
+security find-certificate -a -c "Acme" /Library/Keychains/System.keychain 2>/dev/null || true
+security find-certificate -a -c "DPI" /Library/Keychains/System.keychain 2>/dev/null || true
+
+# Function to safely remove certificates by name pattern
+remove_test_certs() {
+    local pattern="$1"
+    local certs=$(security find-certificate -a -c "$pattern" /Library/Keychains/System.keychain 2>/dev/null | grep "alis" | cut -d'"' -f4)
+    
+    if [ -n "$certs" ]; then
+        echo "Found certificates matching '$pattern':"
+        echo "$certs"
+        echo "Remove these certificates? (y/N)"
+        read -r response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            while IFS= read -r cert_name; do
+                if [ -n "$cert_name" ]; then
+                    echo "Removing certificate: $cert_name"
+                    sudo security delete-certificate -c "$cert_name" /Library/Keychains/System.keychain 2>/dev/null || echo "⚠️ Failed to remove $cert_name (may not exist)"
+                fi
+            done <<< "$certs"
+        fi
+    else
+        echo "✅ No certificates found matching '$pattern'"
+    fi
+}
+
+# Remove test certificates by common patterns  
+remove_test_certs "Acme Corporate Security CA"
+remove_test_certs "Test-CA-localhost"  
+remove_test_certs "Palo Alto Networks Enterprise Root CA"
+remove_test_certs "mitmproxy"
+remove_test_certs "Squid"
+
+# Remove certificates from user keychain as well
+echo "🔍 Checking user keychain..."
+security find-certificate -a -c "Test" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
+security find-certificate -a -c "Corporate" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
+
+# Remove from user keychain if found
+user_certs=$(security find-certificate -a -c "Test" ~/Library/Keychains/login.keychain-db 2>/dev/null | grep "alis" | cut -d'"' -f4)
+if [ -n "$user_certs" ]; then
+    echo "Found test certificates in user keychain. Remove? (y/N)"
+    read -r response  
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        while IFS= read -r cert_name; do
+            security delete-certificate -c "$cert_name" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
+        done <<< "$user_certs"
+    fi
+fi
+```
+
+**Option B: Keychain Access GUI (Visual Verification)**
+
+```bash
+# Open Keychain Access for manual verification
+open "/Applications/Utilities/Keychain Access.app"
+
+# Instructions for manual cleanup:
+echo "📋 Manual cleanup in Keychain Access:"
+echo "1. Select 'System' keychain in the left sidebar"
+echo "2. Click 'Certificates' category"  
+echo "3. Look for certificates with these names:"
+echo "   - Acme Corporate Security CA"
+echo "   - Test-CA-localhost"
+echo "   - Palo Alto Networks Enterprise Root CA"
+echo "   - mitmproxy"
+echo "   - Any certificate issued today with suspicious names"
+echo "4. Right-click suspicious certificates and select 'Delete'"
+echo "5. Enter your admin password when prompted"
+echo "6. Repeat for 'login' keychain"
+```
+
+#### Step 4: Clear Browser Certificate Caches
+
+```bash  
+# Chrome - Clear certificate cache
+if pgrep -x "Google Chrome" > /dev/null; then
+    echo "Stopping Chrome..."
+    osascript -e 'quit app "Google Chrome"' 2>/dev/null || true
+    sleep 2
+fi
+
+# Safari - Clear certificate cache
+if pgrep -x "Safari" > /dev/null; then
+    echo "Stopping Safari..."
+    osascript -e 'quit app "Safari"' 2>/dev/null || true
+    sleep 2
+fi
+
+# Firefox - Clear certificate cache
+if pgrep -x "firefox" > /dev/null; then
+    echo "Stopping Firefox..."
+    osascript -e 'quit app "Firefox"' 2>/dev/null || true
+    sleep 2
+fi
+
+# Clear system certificate cache
+sudo dscacheutil -flushcache
+sudo killall -HUP mDNSResponder 2>/dev/null || true
+
+echo "🔄 Browser certificate caches cleared. Restart browsers to ensure clean state."
+```
+
+#### Step 5: Verification
+
+```bash
+# Verify test certificates are removed
+echo "🔍 Verifying certificate removal..."
+
+test_cert_count=0
+for pattern in "Test" "Corporate" "Acme" "DPI"; do
+    count=$(security find-certificate -a -c "$pattern" /Library/Keychains/System.keychain 2>/dev/null | grep -c "alis" || echo "0")
+    if [ "$count" -gt 0 ]; then
+        echo "⚠️ WARNING: Found $count certificates matching '$pattern'"
+        test_cert_count=$((test_cert_count + count))
+    fi
+done
+
+if [ $test_cert_count -eq 0 ]; then
+    echo "✅ All test certificates successfully removed"
+else
+    echo "⚠️ WARNING: $test_cert_count test certificates still present"
+    echo "Review manually using Keychain Access"
+fi
+
+# Test normal HTTPS connection
+echo "🔗 Testing normal HTTPS connection..."
+if curl -s --connect-timeout 5 https://www.google.com > /dev/null; then
+    echo "✅ HTTPS connections working normally"
+else
+    echo "❌ HTTPS connection issues - check network settings"
+fi
+```
+
+#### 🚨 Emergency Certificate Cleanup
+
+If you accidentally installed malicious certificates or need to reset everything:
+
+```bash
+# NUCLEAR OPTION: Reset certificate trust settings (requires admin password)
+# WARNING: This may affect legitimate certificates and require reconfiguration
+
+echo "⚠️ EMERGENCY CLEANUP - This will reset certificate trust settings"
+echo "Continue? (y/N)"
+read -r response
+
+if [[ "$response" =~ ^[Yy]$ ]]; then
+    # Reset certificate trust settings
+    sudo security authorizationdb write com.apple.trust-settings.admin allow
+    
+    # Remove all user-added certificates (DANGEROUS - use only in emergencies)
+    # sudo rm -rf ~/Library/Keychains/*.keychain-db
+    # sudo security create-keychain ~/Library/Keychains/login.keychain-db
+    
+    echo "🔄 Certificate trust settings reset. You may need to:"
+    echo "  - Re-accept legitimate corporate certificates"  
+    echo "  - Reconfigure browser certificate settings"
+    echo "  - Contact IT support for required certificates"
+fi
+```
+
+#### Automated Cleanup Script
+
+```bash  
+# Use the automated validation script for comprehensive cleanup
+if [ -f "./scripts/validate-dpi-setup.sh" ]; then
+    echo "🤖 Running automated cleanup script..."
+    ./scripts/validate-dpi-setup.sh --cleanup
+else
+    echo "⚠️ Automated cleanup script not found - using manual steps above"
+fi
 ```
 
 ### Privacy Protection

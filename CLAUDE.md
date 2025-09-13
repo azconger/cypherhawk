@@ -156,8 +156,13 @@ cypherhawk/
 ├── go.sum                 # Go module checksums
 ├── CLAUDE.md              # Context file for Claude Code
 ├── README.md              # User documentation and usage examples  
-├── WINDOWS-DPI-TESTING.md # Windows-specific DPI testing setup guide (~311 lines)
-├── MACOS-DPI-TESTING.md   # macOS-specific DPI testing setup guide (~315 lines)
+├── docs/                  # Documentation directory
+│   ├── BUILD.md           # Build instructions and release process
+│   ├── DPI-TESTING.md     # Master DPI testing guide with ASCII diagrams
+│   ├── DPI-TESTING-WINDOWS.md # Windows-specific DPI testing setup guide (~311 lines)
+│   ├── DPI-TESTING-MACOS.md   # macOS-specific DPI testing setup guide (~315 lines)
+│   ├── DPI-TESTING-LINUX.md   # Linux-specific DPI testing setup guide (~315 lines)
+│   └── INTERNAL-DPI-TESTING.md # Internal Go test framework and automated DPI simulations
 └── .github/workflows/build.yml  # Automated testing and release building with fresh CA bundles
 ```
 
@@ -177,8 +182,12 @@ cypherhawk/
 | `scripts/validate-dpi-setup.ps1` | Windows PowerShell DPI testing validation script - automated testing with comprehensive cleanup |
 | `docker/mitmproxy/` | Professional proxy setup - SSL interception with corporate CA generation |
 | `docker/squid/` | Enterprise-grade proxy setup - SSL bumping with corporate CA generation |
-| `WINDOWS-DPI-TESTING.md` | Windows-specific DPI testing setup guide with detailed troubleshooting |
-| `MACOS-DPI-TESTING.md` | macOS-specific DPI testing setup guide with Keychain Access and networksetup instructions |
+| `docs/DPI-TESTING.md` | Master DPI testing guide with ASCII diagrams and platform overview |
+| `docs/DPI-TESTING-WINDOWS.md` | Windows-specific DPI testing setup guide with detailed troubleshooting |
+| `docs/DPI-TESTING-MACOS.md` | macOS-specific DPI testing setup guide with Keychain Access and networksetup instructions |
+| `docs/DPI-TESTING-LINUX.md` | Linux-specific DPI testing setup guide with distro-specific instructions |
+| `docs/INTERNAL-DPI-TESTING.md` | Internal Go test framework and automated DPI simulations for developers |
+| `docs/BUILD.md` | Build instructions, release process, and cross-platform compilation |
 | `testdata/testdata.go` | Mock certificate generation for 6+ DPI vendors - realistic test data for comprehensive validation |
 | `main_test.go` | Core security validation tests with mock DPI environments and advanced threat detection |
 | `cross_platform_test.go` | Cross-platform compatibility tests for Windows, macOS, Linux |

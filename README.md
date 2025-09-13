@@ -405,6 +405,32 @@ CypherHawk is a **defensive security tool** designed to help users adapt to corp
 - **No telemetry**: Tool does not send usage data or certificates to external services
 - **Local operation**: All certificate analysis performed locally with enhanced security algorithms
 
+## Development & Testing
+
+### 🧪 DPI Testing Environment
+
+Want to test CypherHawk's detection capabilities? We provide both user-friendly testing setups and developer-focused internal testing:
+
+#### For Users - External DPI Testing
+
+Set up realistic corporate DPI simulations to validate CypherHawk:
+
+- **📋 [DPI Testing Guide](docs/DPI-TESTING.md)** - Complete testing environment setup overview
+- **🪟 [Windows Testing](docs/DPI-TESTING-WINDOWS.md)** - Windows-specific setup with PowerShell cleanup
+- **🍎 [macOS Testing](docs/DPI-TESTING-MACOS.md)** - macOS setup with Keychain Access integration
+- **🐧 [Linux Testing](docs/DPI-TESTING-LINUX.md)** - Linux setup across Ubuntu, CentOS, Fedora, Arch
+
+**Testing approaches:** Go test servers, mitmproxy, Squid proxy with SSL bumping  
+**Simulates:** Palo Alto, Zscaler, Netskope, and other enterprise DPI solutions  
+**Includes:** Complete certificate cleanup procedures for security
+
+#### For Developers - Internal Test Framework
+
+- **🔧 [Internal DPI Testing](docs/INTERNAL-DPI-TESTING.md)** - Go test framework and automated DPI simulations
+- **Purpose:** Running/extending CypherHawk's internal test suite
+- **Content:** Go code examples, test functions, CI/CD integration
+- **Usage:** `go test -v -run TestRealisticDPIEnvironments`
+
 ## Support
 
 - 📖 [Documentation](https://github.com/kaakaww/cypherhawk/wiki)

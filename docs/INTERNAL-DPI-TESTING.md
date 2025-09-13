@@ -1,10 +1,31 @@
-# CypherHawk DPI Testing Guide
+# CypherHawk Internal DPI Testing Guide
 
-This guide explains how to create realistic test DPI environments for testing CypherHawk's detection capabilities.
+> **For Users:** Looking to test CypherHawk against real DPI environments? See [DPI-TESTING.md](DPI-TESTING.md) for user-friendly testing setups.
+> 
+> **For Developers:** This guide explains CypherHawk's internal test infrastructure and automated DPI simulation framework.
+
+This guide is for **CypherHawk developers** who want to understand, run, or extend the internal test suite that validates DPI detection capabilities using Go's testing framework.
 
 ## Overview
 
-CypherHawk includes comprehensive test infrastructure for simulating various DPI/MitM scenarios, from legitimate corporate environments to malicious attacks.
+CypherHawk includes comprehensive **automated test infrastructure** for simulating various DPI/MitM scenarios, from legitimate corporate environments to malicious attacks. This framework:
+
+- **Validates detection algorithms** against known DPI patterns
+- **Tests security analysis features** (behavioral analysis, CT validation, CA impersonation detection) 
+- **Ensures cross-platform compatibility** with mock certificate generation
+- **Supports CI/CD integration** for continuous validation
+- **Provides realistic test scenarios** based on real-world enterprise DPI solutions
+
+## Key Differences from User Testing
+
+| Aspect | Internal Testing (This Guide) | External Testing ([DPI-TESTING.md](DPI-TESTING.md)) |
+|--------|------------------------------|---------------------------------------------------|
+| **Audience** | CypherHawk developers | CypherHawk users |
+| **Purpose** | Validate CypherHawk code | Validate CypherHawk against real DPI |
+| **Method** | Go test framework | Docker containers, real proxies |
+| **Certificates** | Generated in-memory | Installed in system trust store |
+| **Environment** | Automated, CI/CD friendly | Manual setup, requires cleanup |
+| **Scope** | Unit/integration testing | End-to-end validation |
 
 ## Test Infrastructure
 
@@ -182,3 +203,31 @@ To add new DPI vendors or techniques:
 4. Add setup function to `TestAdvancedDPITechniques` for sophisticated techniques
 
 This framework provides comprehensive testing for DPI detection across the spectrum from legitimate corporate security to malicious attacks.
+
+## Relationship to External Testing
+
+The **internal testing framework** (this guide) and **external testing environments** ([DPI-TESTING.md](DPI-TESTING.md)) work together:
+
+### Development Workflow
+
+1. **Internal Testing First**: Use this framework to validate new detection logic
+2. **External Validation**: Test against real DPI environments using user guides  
+3. **Iterate**: Update internal tests based on real-world findings
+4. **CI/CD Integration**: Automated internal testing ensures regression prevention
+
+### Complementary Purposes
+
+- **Internal tests** ensure CypherHawk's algorithms work correctly
+- **External tests** validate that CypherHawk works in realistic environments
+- **Both are essential** for comprehensive DPI detection validation
+
+### For New Contributors
+
+1. Start with **internal testing** to understand CypherHawk's detection logic
+2. Run `go test -v` to see the full test suite in action
+3. Use **external testing** to validate your changes against real proxies
+4. Contribute new test scenarios based on real-world DPI discoveries
+
+---
+
+**Next Steps:** Ready to test CypherHawk against real DPI environments? See [DPI-TESTING.md](DPI-TESTING.md) for user-friendly testing setups.
