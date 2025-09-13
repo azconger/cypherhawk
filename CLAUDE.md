@@ -31,20 +31,24 @@ Built by StackHawk but designed for the broader Java ecosystem including Maven, 
 - Complete cross-platform DPI testing capability established
 
 ## Project Type
-- **Language:** Go (zero external dependencies)
+- **Language:** Go with high-quality external modules
 - **Type:** CLI application for defensive security analysis
-- **Distribution:** Single static binary (no dependencies required)
+- **Distribution:** Single static binary with minimal dependencies
+- **Dependencies:** HashiCorp go-retryablehttp, Cobra CLI framework, Viper configuration
 - **Validation:** Multiple Mozilla CA bundle sources with cross-validation
-- **Architecture:** Modular internal packages with comprehensive test coverage
+- **Architecture:** Modular internal packages with robust external libraries
 - **Security Focus:** Corporate DPI detection, threat analysis, defensive tooling
+- **Logging:** Structured logging with configurable levels for enterprise debugging
 
 ## Build Commands
 
 ```bash
-# Development (standard Go project structure)
+# Development (enhanced CLI with Cobra framework)
 go run ./cmd/cypherhawk              # Run the tool with default settings
-go run ./cmd/cypherhawk -url https://example.com  # Run with custom target URL
-go run ./cmd/cypherhawk -o certs.pem # Save certificates to file
+go run ./cmd/cypherhawk --url https://example.com  # Run with custom target URL
+go run ./cmd/cypherhawk --output certs.pem # Save certificates to file
+go run ./cmd/cypherhawk detect --verbose --analyze  # Enhanced analysis with structured logging
+go run ./cmd/cypherhawk version      # Show version information
 go test -v ./...               # Run comprehensive tests with mock DPI simulation
 
 # Build (includes fresh CA bundle download)
@@ -87,13 +91,16 @@ make clean          # Clean build artifacts
 ### Key Components
 - **Build-time CA bundle updates** - Downloads latest Mozilla CA certificates during build process to prevent stale embedded bundles
 - **Multiple CA bundle sources** - Cross-validates Mozilla CA bundles from multiple sources with integrity checking
+- **Enhanced HTTP client** - HashiCorp go-retryablehttp for robust networking with enterprise proxy support
+- **Professional CLI** - Cobra framework with subcommands, configuration files, and structured help
+- **Structured logging** - Go 1.21+ slog with configurable levels for enterprise debugging
 - **Enhanced certificate chain validation** - Browser-like certificate verification with hostname validation
 - **Certificate Transparency validation** - Checks for SCT extensions in recent certificates
 - **Comprehensive behavioral analysis** - 10+ suspicious behavior indicators including weak keys, recent issuance, unusual validity periods
 - **CA impersonation detection** - Detects certificates claiming to be from legitimate CAs but with suspicious characteristics
 - **DPI vendor identification** - Recognizes major enterprise security vendors (Palo Alto, Netskope, Zscaler)
 - **Risk scoring system** - Combines multiple security indicators for high-confidence detection
-- **Flexible target URLs** - Supports custom target URLs via `-url` flag (default: 4 endpoints)
+- **Flexible target URLs** - Supports custom target URLs via `--url` flag (default: 4 endpoints)
 - **PEM extraction** - Outputs unknown CA certificates in standard PEM format
 - **Complete DPI testing infrastructure** - Standalone server, mitmproxy, and Squid setups with cross-platform validation scripts
 
@@ -252,13 +259,21 @@ The tool tests against four key endpoints that represent common corporate networ
 ## Command Line Interface
 
 ```bash
-# Basic usage
+# Basic usage with enhanced Cobra CLI
 cypherhawk                          # Test default 4 endpoints (Google, StackHawk auth/API, AWS S3)
-cypherhawk -url https://example.com # Test specific target URL
-cypherhawk -o certs.pem            # Save certificates to file
-cypherhawk -o -                    # Output certificates to stdout
-cypherhawk --verbose               # Enable detailed security analysis output
-cypherhawk --help                 # Show comprehensive HawkScan integration help
+cypherhawk --url https://example.com # Test specific target URL
+cypherhawk detect https://example.com # Alternative subcommand syntax
+cypherhawk --output certs.pem      # Save certificates to file  
+cypherhawk --output -              # Output certificates to stdout
+cypherhawk --verbose --analyze     # Enable detailed security analysis output
+cypherhawk --log-level debug       # Enhanced debugging with structured logging
+cypherhawk version                 # Show version information
+cypherhawk --help                  # Show comprehensive help with examples
+
+# Configuration and environment
+export CYPHERHAWK_OUTPUT=certs.pem # Environment variable support via Viper
+export CYPHERHAWK_LOG_LEVEL=debug  # Configure logging level
+cypherhawk --silent --output certs.pem # Script-friendly silent mode
 
 # Future enhanced modes (Phase 4+)
 cypherhawk --mode paranoid         # Alert on ANY unknown certificates (untrusted networks)

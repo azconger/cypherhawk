@@ -1,16 +1,18 @@
 package bundle
 
 import (
+	"context"
 	"crypto/x509"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/kaakaww/cypherhawk/internal/bundle/embedded"
 )
 
@@ -40,10 +42,10 @@ var DefaultSources = []Source{
 
 // DownloadAndValidate downloads CA bundles from multiple sources and cross-validates them
 func DownloadAndValidate() (*x509.CertPool, string, error) {
-	// Create HTTP client with proxy support for corporate environments
-	client := createHTTPClient()
-	if client == nil {
-		return nil, "", fmt.Errorf("failed to create HTTP client")
+	// Create retryable HTTP client with corporate proxy support
+	client, err := createBundleHTTPClient()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
 	var primaryBundle *x509.CertPool
@@ -51,9 +53,9 @@ func DownloadAndValidate() (*x509.CertPool, string, error) {
 	var bundleSizes []int
 	var successfulSources []string
 
-	// Download from all sources with retry logic
+	// Download from all sources with enhanced retry logic
 	for _, source := range DefaultSources {
-		resp, err := downloadWithRetry(client, source)
+		resp, err := downloadBundle(client, source)
 		if err != nil {
 			if source.Primary {
 				return nil, "", enhanceBundleDownloadError(err, source)
@@ -134,23 +136,35 @@ func abs(x int) int {
 	return x
 }
 
-// createHTTPClient creates an HTTP client with corporate proxy support
-func createHTTPClient() *http.Client {
-	transport := &http.Transport{}
+// createBundleHTTPClient creates a retryable HTTP client for CA bundle downloads
+func createBundleHTTPClient() (*retryablehttp.Client, error) {
+	transport := &http.Transport{
+		// Standard timeouts for CA bundle downloads
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 15 * time.Second,
+	}
 
-	// Configure proxy from environment variables
-	if err := configureProxyForTransport(transport); err != nil {
-		// Log error but continue - proxy configuration is optional
-		return &http.Client{
-			Transport: transport,
-			Timeout:   30 * time.Second,
+	// Use Go's built-in proxy detection
+	transport.Proxy = http.ProxyFromEnvironment
+
+	// Create retryable HTTP client
+	client := retryablehttp.NewClient()
+	client.HTTPClient.Transport = transport
+	client.HTTPClient.Timeout = 30 * time.Second
+	client.RetryMax = 3
+	client.RetryWaitMin = 2 * time.Second
+	client.RetryWaitMax = 8 * time.Second
+	client.Logger = slog.Default()
+
+	// Custom retry policy for CA bundle downloads
+	client.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		if err != nil && isBundleNonRetryableError(err) {
+			return false, nil
 		}
+		return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
 	}
 
-	return &http.Client{
-		Transport: transport,
-		Timeout:   15 * time.Second, // Reduced timeout for faster test feedback
-	}
+	return client, nil
 }
 
 // enhanceBundleDownloadError provides helpful error messages for CA bundle download failures
@@ -244,33 +258,19 @@ func loadEmbeddedBundle() (*x509.CertPool, string, error) {
 	return certPool, info, nil
 }
 
-// downloadWithRetry attempts to download from a CA source with retry logic
-func downloadWithRetry(client *http.Client, source Source) (*http.Response, error) {
-	const maxRetries = 3
-	const baseDelay = 2 * time.Second
-
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		resp, err := client.Get(source.URL)
-		if err == nil {
-			return resp, nil
-		}
-
-		// Don't retry for certain errors
-		if isBundleNonRetryableError(err) {
-			return nil, err
-		}
-
-		// If this was the last attempt, return the error
-		if attempt == maxRetries {
-			return nil, fmt.Errorf("failed after %d attempts: %v", maxRetries, err)
-		}
-
-		// Wait before retrying with exponential backoff
-		delay := time.Duration(attempt) * baseDelay
-		time.Sleep(delay)
+// downloadBundle downloads a CA bundle from a source using retryable HTTP client
+func downloadBundle(client *retryablehttp.Client, source Source) (*http.Response, error) {
+	req, err := retryablehttp.NewRequest("GET", source.URL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for %s: %w", source.Name, err)
 	}
 
-	return nil, fmt.Errorf("unexpected error in retry logic")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download from %s: %w", source.Name, err)
+	}
+
+	return resp, nil
 }
 
 // isBundleNonRetryableError checks if a bundle download error should not be retried
@@ -294,57 +294,4 @@ func isBundleNonRetryableError(err error) bool {
 
 	// Retry timeouts and temporary network errors
 	return false
-}
-
-// configureProxyForTransport configures HTTP proxy for the transport
-func configureProxyForTransport(transport *http.Transport) error {
-	// Check for HTTP_PROXY and HTTPS_PROXY environment variables
-	httpProxy := os.Getenv("HTTP_PROXY")
-	httpsProxy := os.Getenv("HTTPS_PROXY")
-
-	// Also check lowercase versions (common in Unix environments)
-	if httpProxy == "" {
-		httpProxy = os.Getenv("http_proxy")
-	}
-	if httpsProxy == "" {
-		httpsProxy = os.Getenv("https_proxy")
-	}
-
-	// If no proxy is configured, use default behavior
-	if httpProxy == "" && httpsProxy == "" {
-		return nil
-	}
-
-	// Create proxy function
-	transport.Proxy = func(req *http.Request) (*url.URL, error) {
-		var proxyURL string
-
-		switch req.URL.Scheme {
-		case "http":
-			if httpProxy != "" {
-				proxyURL = httpProxy
-			}
-		case "https":
-			if httpsProxy != "" {
-				proxyURL = httpsProxy
-			} else if httpProxy != "" {
-				// Fall back to HTTP_PROXY for HTTPS if HTTPS_PROXY not set
-				proxyURL = httpProxy
-			}
-		}
-
-		if proxyURL == "" {
-			return nil, nil // No proxy
-		}
-
-		// Parse and validate proxy URL
-		proxy, err := url.Parse(proxyURL)
-		if err != nil {
-			return nil, fmt.Errorf("invalid proxy URL %s: %v", proxyURL, err)
-		}
-
-		return proxy, nil
-	}
-
-	return nil
 }

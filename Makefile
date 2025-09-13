@@ -74,13 +74,28 @@ dev: build
 
 # Run tests (default - includes all important tests)
 test: update-ca-bundle
+	@echo "🧪 Running comprehensive tests..."
+	@go test -timeout=180s -count=1 ./... && echo "✅ All tests passed successfully" || (echo "❌ Tests failed" && exit 1)
+
+# Run tests with coverage report (may be slower)
+test-with-coverage: update-ca-bundle
 	go test -v -timeout=300s -count=1 -race -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report: coverage.html"
+	@if [ -f coverage.out ] && [ -s coverage.out ]; then \
+		echo "Generating coverage report..."; \
+		go tool cover -html=coverage.out -o coverage.html; \
+		echo "Coverage report: coverage.html"; \
+	else \
+		echo "No coverage data generated or file is empty"; \
+	fi
 
 # Run fast tests (skips network-dependent tests for development)
 test-fast:
 	CYPHERHAWK_SKIP_NETWORK_TESTS=1 go test -v -count=1 -short -timeout=60s ./...
+
+# Run tests without race detector (if race detector causes issues)
+test-basic: update-ca-bundle
+	go test -v -timeout=180s -count=1 ./...
+	@echo "✅ Basic tests completed"
 
 # Run tests without network dependencies (CI-friendly)
 test-ci:

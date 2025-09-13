@@ -22,16 +22,16 @@ import (
 
 // DPIProfile defines different types of DPI configurations to simulate
 type DPIProfile struct {
-	Name               string
-	Organization       string
-	CommonName         string
-	SerialNumber       int64
-	ValidityYears      int
-	WeakSignature      bool   // Use SHA1 instead of SHA256
-	SuspiciousSerial   bool   // Use trivial serial numbers
-	RecentIssuance     bool   // Issue certificate very recently
-	SuspiciousTerms    []string // Include suspicious terms in subject
-	Port               int
+	Name             string
+	Organization     string
+	CommonName       string
+	SerialNumber     int64
+	ValidityYears    int
+	WeakSignature    bool     // Use SHA1 instead of SHA256
+	SuspiciousSerial bool     // Use trivial serial numbers
+	RecentIssuance   bool     // Issue certificate very recently
+	SuspiciousTerms  []string // Include suspicious terms in subject
+	Port             int
 }
 
 // Available DPI profiles for testing
@@ -48,7 +48,7 @@ var dpiProfiles = map[string]DPIProfile{
 		Name:          "Zscaler",
 		Organization:  "Zscaler Inc",
 		CommonName:    "Zscaler Root CA",
-		SerialNumber:  0x9876543210fedcba,
+		SerialNumber:  0x9876543210fed,
 		ValidityYears: 5,
 		Port:          8444,
 	},
@@ -61,13 +61,13 @@ var dpiProfiles = map[string]DPIProfile{
 		Port:          8445,
 	},
 	"generic": {
-		Name:          "Generic Corporate",
-		Organization:  "Acme Corporation",
-		CommonName:    "Acme Corporate Security CA",
-		SerialNumber:  1, // Suspicious serial
-		ValidityYears: 20,
+		Name:             "Generic Corporate",
+		Organization:     "Acme Corporation",
+		CommonName:       "Acme Corporate Security CA",
+		SerialNumber:     1, // Suspicious serial
+		ValidityYears:    20,
 		SuspiciousSerial: true,
-		Port:          8446,
+		Port:             8446,
 	},
 	"malicious": {
 		Name:             "Malicious DPI",
@@ -133,11 +133,11 @@ func main() {
 	// Create TLS server
 	fmt.Printf("🚀 Starting %s DPI test server on port %d...\n", dpiProfile.Name, dpiProfile.Port)
 	server := createDPITestServer(dpiProfile, caCert, caKey, serverCert, serverKey)
-	
+
 	fmt.Printf("\n✅ Server running at https://localhost:%d\n", dpiProfile.Port)
 	fmt.Printf("📋 Test with CypherHawk: ./cypherhawk -url https://localhost:%d\n", dpiProfile.Port)
 	fmt.Printf("🛑 Press Ctrl+C to stop\n\n")
-	
+
 	// Server info
 	printServerInfo(dpiProfile, caCert)
 
@@ -155,11 +155,11 @@ func generateDPICertificates(profile DPIProfile) (*x509.Certificate, *rsa.Privat
 	caTemplate := x509.Certificate{
 		SerialNumber: big.NewInt(profile.SerialNumber),
 		Subject: pkix.Name{
-			Organization:  []string{profile.Organization},
-			Country:       []string{"US"},
-			Province:      []string{"CA"},
-			Locality:      []string{"San Francisco"},
-			CommonName:    profile.CommonName,
+			Organization: []string{profile.Organization},
+			Country:      []string{"US"},
+			Province:     []string{"CA"},
+			Locality:     []string{"San Francisco"},
+			CommonName:   profile.CommonName,
 		},
 		NotBefore:             time.Now().Add(-1 * time.Hour), // Start 1 hour ago
 		NotAfter:              time.Now().Add(time.Duration(profile.ValidityYears) * 365 * 24 * time.Hour),
@@ -194,11 +194,11 @@ func generateDPICertificates(profile DPIProfile) (*x509.Certificate, *rsa.Privat
 	serverTemplate := x509.Certificate{
 		SerialNumber: big.NewInt(profile.SerialNumber + 1),
 		Subject: pkix.Name{
-			Organization:  []string{profile.Organization},
-			Country:       []string{"US"},
-			Province:      []string{"CA"},
-			Locality:      []string{"San Francisco"},
-			CommonName:    "localhost",
+			Organization: []string{profile.Organization},
+			Country:      []string{"US"},
+			Province:     []string{"CA"},
+			Locality:     []string{"San Francisco"},
+			CommonName:   "localhost",
 		},
 		NotBefore:   time.Now().Add(-1 * time.Hour),
 		NotAfter:    time.Now().Add(time.Duration(profile.ValidityYears) * 365 * 24 * time.Hour),
@@ -238,7 +238,7 @@ func createDPITestServer(profile DPIProfile, caCert *x509.Certificate, caKey *rs
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		
+
 		response := fmt.Sprintf(`{
   "message": "%s DPI Test Server",
   "profile": "%s",
@@ -248,12 +248,12 @@ func createDPITestServer(profile DPIProfile, caCert *x509.Certificate, caKey *rs
   "client_ip": "%s",
   "user_agent": "%s",
   "tls_version": "%s"
-}`, profile.Name, profile.Name, profile.Organization, profile.CommonName, 
-			time.Now().Format(time.RFC3339), 
-			r.RemoteAddr, 
+}`, profile.Name, profile.Name, profile.Organization, profile.CommonName,
+			time.Now().Format(time.RFC3339),
+			r.RemoteAddr,
 			r.Header.Get("User-Agent"),
 			getTLSVersion(r))
-		
+
 		w.Write([]byte(response))
 	})
 
@@ -345,7 +345,7 @@ func getTLSVersion(r *http.Request) string {
 	if r.TLS == nil {
 		return "none"
 	}
-	
+
 	switch r.TLS.Version {
 	case tls.VersionTLS10:
 		return "TLS 1.0"
@@ -411,9 +411,9 @@ WINDOWS USAGE:
 
 func showProfiles() {
 	fmt.Printf("Available DPI Profiles:\n\n")
-	
+
 	profiles := []string{"palo-alto", "zscaler", "netskope", "generic", "malicious"}
-	
+
 	for _, name := range profiles {
 		profile := dpiProfiles[name]
 		fmt.Printf("📋 %s:\n", name)
@@ -422,7 +422,7 @@ func showProfiles() {
 		fmt.Printf("   Common Name: %s\n", profile.CommonName)
 		fmt.Printf("   Default Port: %d\n", profile.Port)
 		fmt.Printf("   Validity: %d years\n", profile.ValidityYears)
-		
+
 		var characteristics []string
 		if profile.WeakSignature {
 			characteristics = append(characteristics, "Weak Signature")
@@ -436,13 +436,13 @@ func showProfiles() {
 		if len(profile.SuspiciousTerms) > 0 {
 			characteristics = append(characteristics, "Suspicious Terms")
 		}
-		
+
 		if len(characteristics) > 0 {
 			fmt.Printf("   Suspicious Characteristics: %v\n", characteristics)
 		}
-		
+
 		fmt.Printf("\n")
 	}
-	
+
 	fmt.Printf("💡 TIP: Use 'generic' for basic testing, 'malicious' for high-risk detection validation\n")
 }

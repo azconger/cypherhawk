@@ -1,47 +1,34 @@
 package network
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/go-retryablehttp"
 )
 
 // GetCertificateChain connects to an endpoint and extracts the certificate chain
-// with retry logic for corporate networks
+// with enhanced retry logic for corporate networks
 func GetCertificateChain(targetURL string) ([]*x509.Certificate, error) {
 	return GetCertificateChainWithConfig(targetURL, DefaultNetworkConfig())
 }
 
 // GetCertificateChainWithConfig allows custom network configuration
 func GetCertificateChainWithConfig(targetURL string, config NetworkConfig) ([]*x509.Certificate, error) {
-	for attempt := 1; attempt <= config.MaxRetries; attempt++ {
-		certs, err := getCertificateChainAttemptWithConfig(targetURL, config)
-		if err == nil {
-			return certs, nil
-		}
-
-		// Don't retry for certain errors
-		if isNonRetryableError(err) {
-			return nil, err
-		}
-
-		// If this was the last attempt, return the error
-		if attempt == config.MaxRetries {
-			return nil, fmt.Errorf("failed after %d attempts: %v", config.MaxRetries, err)
-		}
-
-		// Wait before retrying with exponential backoff
-		delay := time.Duration(attempt) * config.BaseDelay
-		time.Sleep(delay)
+	client, err := createRetryableHTTPClient(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	return nil, fmt.Errorf("unexpected error in retry logic")
+	return getCertificateChainWithRetryableClient(client, targetURL)
 }
 
 // NetworkConfig allows customization of network behavior
@@ -75,40 +62,59 @@ func FastNetworkConfig() NetworkConfig {
 	}
 }
 
-// getCertificateChainAttempt performs a single attempt to get certificates with default config
-func getCertificateChainAttempt(targetURL string) ([]*x509.Certificate, error) {
-	return getCertificateChainAttemptWithConfig(targetURL, DefaultNetworkConfig())
-}
-
-// getCertificateChainAttemptWithConfig performs a single attempt to get certificates with custom config
-func getCertificateChainAttemptWithConfig(targetURL string, config NetworkConfig) ([]*x509.Certificate, error) {
-	// Create HTTP transport with corporate proxy support and proper timeouts
+// createRetryableHTTPClient creates a retryable HTTP client with corporate proxy support
+func createRetryableHTTPClient(config NetworkConfig) (*retryablehttp.Client, error) {
+	// Create base transport with TLS configuration
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
+			InsecureSkipVerify: true, // Required to capture all certificate chains
 		},
-		// Set dial timeout to prevent hanging on non-routable IPs
 		DialContext: (&net.Dialer{
-			Timeout:   config.ConnectTimeout, // Connection timeout
-			KeepAlive: 30 * time.Second,      // Keep alive for reuse
+			Timeout:   config.ConnectTimeout,
+			KeepAlive: 30 * time.Second,
 		}).DialContext,
-		// TLS handshake timeout
-		TLSHandshakeTimeout: config.TLSHandshakeTimeout,
-		// Response header timeout
+		TLSHandshakeTimeout:   config.TLSHandshakeTimeout,
 		ResponseHeaderTimeout: config.ClientTimeout,
 	}
 
 	// Configure HTTP proxy support from environment variables
 	if err := configureProxy(tr); err != nil {
-		return nil, fmt.Errorf("proxy configuration error: %v", err)
+		return nil, fmt.Errorf("proxy configuration error: %w", err)
 	}
 
-	client := &http.Client{
-		Transport: tr,
-		Timeout:   config.ClientTimeout,
+	// Create retryable HTTP client
+	client := retryablehttp.NewClient()
+	client.HTTPClient.Transport = tr
+	client.HTTPClient.Timeout = config.ClientTimeout
+	client.RetryMax = config.MaxRetries - 1 // retryablehttp counts initial attempt
+	client.RetryWaitMin = config.BaseDelay
+	client.RetryWaitMax = config.BaseDelay * 4 // Max backoff
+	client.Logger = slog.Default()             // Use structured logging
+
+	// Custom retry policy for certificate extraction
+	client.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		if err != nil {
+			// Don't retry certain errors that are what we want to capture
+			if isNonRetryableError(err) {
+				return false, nil
+			}
+		}
+
+		// Use default retry logic for other cases
+		return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
 	}
 
-	resp, err := client.Get(targetURL)
+	return client, nil
+}
+
+// getCertificateChainWithRetryableClient extracts certificates using retryable client
+func getCertificateChainWithRetryableClient(client *retryablehttp.Client, targetURL string) ([]*x509.Certificate, error) {
+	req, err := retryablehttp.NewRequest("GET", targetURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, enhanceNetworkError(err, targetURL)
 	}
@@ -124,54 +130,8 @@ func getCertificateChainAttemptWithConfig(targetURL string, config NetworkConfig
 
 // configureProxy configures HTTP proxy support from environment variables
 func configureProxy(transport *http.Transport) error {
-	// Check for HTTP_PROXY and HTTPS_PROXY environment variables
-	httpProxy := os.Getenv("HTTP_PROXY")
-	httpsProxy := os.Getenv("HTTPS_PROXY")
-
-	// Also check lowercase versions (common in Unix environments)
-	if httpProxy == "" {
-		httpProxy = os.Getenv("http_proxy")
-	}
-	if httpsProxy == "" {
-		httpsProxy = os.Getenv("https_proxy")
-	}
-
-	// If no proxy is configured, use default behavior
-	if httpProxy == "" && httpsProxy == "" {
-		return nil
-	}
-
-	// Create proxy function
-	transport.Proxy = func(req *http.Request) (*url.URL, error) {
-		var proxyURL string
-
-		switch req.URL.Scheme {
-		case "http":
-			if httpProxy != "" {
-				proxyURL = httpProxy
-			}
-		case "https":
-			if httpsProxy != "" {
-				proxyURL = httpsProxy
-			} else if httpProxy != "" {
-				// Fall back to HTTP_PROXY for HTTPS if HTTPS_PROXY not set
-				proxyURL = httpProxy
-			}
-		}
-
-		if proxyURL == "" {
-			return nil, nil // No proxy
-		}
-
-		// Parse and validate proxy URL
-		proxy, err := url.Parse(proxyURL)
-		if err != nil {
-			return nil, fmt.Errorf("invalid proxy URL %s: %v", proxyURL, err)
-		}
-
-		return proxy, nil
-	}
-
+	// Use Go's built-in proxy detection first
+	transport.Proxy = http.ProxyFromEnvironment
 	return nil
 }
 

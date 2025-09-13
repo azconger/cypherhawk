@@ -2,6 +2,8 @@ package analysis
 
 import (
 	"crypto/x509"
+	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 )
@@ -28,8 +30,14 @@ type TrustDiscrepancy struct {
 // Only flags certificates when they are not trusted by Mozilla's CA bundle
 func ValidateChain(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostname string) []*x509.Certificate {
 	if len(certs) == 0 {
+		slog.Debug("empty certificate chain provided")
 		return nil
 	}
+
+	slog.Debug("validating certificate chain",
+		"chain_length", len(certs),
+		"hostname", hostname,
+		"leaf_subject", certs[0].Subject.String())
 
 	// First, try to validate the complete certificate chain against Mozilla roots
 	leafCert := certs[0] // First certificate should be the leaf certificate
@@ -38,6 +46,10 @@ func ValidateChain(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostnam
 	intermediates := x509.NewCertPool()
 	for i := 1; i < len(certs); i++ {
 		intermediates.AddCert(certs[i])
+		slog.Debug("added intermediate certificate",
+			"index", i,
+			"subject", certs[i].Subject.String(),
+			"issuer", certs[i].Issuer.String())
 	}
 
 	// Try to verify the certificate chain without hostname validation first
@@ -51,24 +63,36 @@ func ValidateChain(certs []*x509.Certificate, mozillaCAs *x509.CertPool, hostnam
 	_, chainErr := leafCert.Verify(chainOpts)
 	if chainErr == nil {
 		// Chain validates successfully through Mozilla roots
-		// This means the certificate is issued by trusted CAs, not corporate DPI
+		slog.Debug("certificate chain validates against Mozilla roots - no DPI detected")
 		return nil
 	}
+
+	slog.Debug("certificate chain validation failed", "error", chainErr.Error())
 
 	// Chain validation failed - examine each CA certificate individually
 	// This is more reliable than trying to determine "trust anchors"
 	var unknownCAs []*x509.Certificate
 
-	for _, cert := range certs {
+	for i, cert := range certs {
 		// Only examine CA certificates for DPI detection
 		if cert.IsCA {
+			slog.Debug("examining CA certificate",
+				"index", i,
+				"subject", cert.Subject.String(),
+				"is_self_signed", cert.Subject.String() == cert.Issuer.String())
+
 			// Check if this CA certificate is trusted by Mozilla
 			if !IsTrustedByMozilla(cert, mozillaCAs, certs) {
+				slog.Info("detected unknown CA certificate - potential DPI",
+					"subject", cert.Subject.String(),
+					"issuer", cert.Issuer.String(),
+					"serial", fmt.Sprintf("%x", cert.SerialNumber))
 				unknownCAs = append(unknownCAs, cert)
 			}
 		}
 	}
 
+	slog.Debug("certificate chain analysis complete", "unknown_cas_found", len(unknownCAs))
 	return unknownCAs
 }
 
@@ -172,15 +196,23 @@ func IsPotentialDPICA(cert *x509.Certificate) bool {
 func IsTrustedByMozilla(cert *x509.Certificate, mozillaCAs *x509.CertPool, allCerts []*x509.Certificate) bool {
 	// Only examine CA certificates for corporate/DPI detection
 	if !cert.IsCA {
+		slog.Debug("skipping non-CA certificate", "subject", cert.Subject.String())
 		return true // Skip non-CA certificates - we only care about CA certs
 	}
 
 	if mozillaCAs == nil {
+		slog.Warn("no Mozilla CA bundle available for verification")
 		return false // No Mozilla CA bundle available - can't verify
 	}
 
+	slog.Debug("checking certificate trust against Mozilla bundle",
+		"subject", cert.Subject.String(),
+		"issuer", cert.Issuer.String(),
+		"is_self_signed", cert.Subject.String() == cert.Issuer.String())
+
 	// For self-signed certificates, check if they're directly in Mozilla's CA bundle
 	if cert.Subject.String() == cert.Issuer.String() {
+		slog.Debug("checking self-signed certificate against Mozilla roots")
 		// Try to verify the certificate directly as a root CA
 		opts := x509.VerifyOptions{
 			Roots:     mozillaCAs,

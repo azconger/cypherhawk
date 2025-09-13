@@ -1,4 +1,4 @@
-package main
+package integration_test
 
 import (
 	"crypto/tls"
@@ -167,8 +167,8 @@ func TestRetryLogic(t *testing.T) {
 			t.Errorf("Retry took too long: %v (expected ~8s)", duration)
 		}
 
-		// Should mention "failed after 2 attempts" indicating retry happened
-		if !strings.Contains(err.Error(), "failed after 2 attempts") {
+		// Should mention retry attempts indicating retry happened - update for new retryablehttp client
+		if !strings.Contains(err.Error(), "giving up after") && !strings.Contains(err.Error(), "failed after") {
 			t.Errorf("Expected retry attempt message, got: %v", err)
 		}
 
