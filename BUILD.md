@@ -215,6 +215,6 @@ sha256sum -c cypherhawk-linux-amd64.sha256
 
 ### Reproducible Builds
 - Deterministic build flags
-- No external dependencies
+- Minimal high-quality dependencies (go-retryablehttp, Cobra, Viper)
 - Version information embedded at build time
 - Clean, minimal attack surface

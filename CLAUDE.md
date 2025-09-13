@@ -82,27 +82,34 @@ make clean          # Clean build artifacts
 ## Architecture & Design Decisions
 
 ### Core Principles
-- **Zero external dependencies** - Uses only Go standard library for easy distribution
+- **Minimal high-quality dependencies** - Uses battle-tested libraries (HashiCorp go-retryablehttp, Cobra, Viper) for enterprise-grade functionality
 - **Single binary** - Customers can download and run immediately
 - **Cross-platform** - Supports Linux, macOS, Windows (AMD64/ARM64)
 - **Enterprise-focused** - Designed for corporate environments with DPI
 - **Mozilla CA validation** - Uses Mozilla's trusted CA bundle for accurate MitM detection
 
 ### Key Components
-- **Build-time CA bundle updates** - Downloads latest Mozilla CA certificates during build process to prevent stale embedded bundles
+**🔧 Enhanced Architecture:**
+- **Enterprise HTTP networking** - HashiCorp go-retryablehttp with exponential backoff, jitter, and circuit breaker patterns
+- **Professional CLI framework** - Cobra with subcommands, structured help, and configuration management
+- **Environment variable support** - Viper configuration with `CYPHERHAWK_*` environment variables
+- **Structured logging** - Go 1.21+ slog with configurable levels and enterprise-friendly output
+- **Enhanced error handling** - Robust retry logic with corporate network guidance
+
+**🔒 Security Features:**
+- **Build-time CA bundle updates** - Downloads latest Mozilla CA certificates during build process
 - **Multiple CA bundle sources** - Cross-validates Mozilla CA bundles from multiple sources with integrity checking
-- **Enhanced HTTP client** - HashiCorp go-retryablehttp for robust networking with enterprise proxy support
-- **Professional CLI** - Cobra framework with subcommands, configuration files, and structured help
-- **Structured logging** - Go 1.21+ slog with configurable levels for enterprise debugging
-- **Enhanced certificate chain validation** - Browser-like certificate verification with hostname validation
+- **Enhanced certificate chain validation** - Browser-like verification with detailed logging
 - **Certificate Transparency validation** - Checks for SCT extensions in recent certificates
-- **Comprehensive behavioral analysis** - 10+ suspicious behavior indicators including weak keys, recent issuance, unusual validity periods
-- **CA impersonation detection** - Detects certificates claiming to be from legitimate CAs but with suspicious characteristics
-- **DPI vendor identification** - Recognizes major enterprise security vendors (Palo Alto, Netskope, Zscaler)
-- **Risk scoring system** - Combines multiple security indicators for high-confidence detection
-- **Flexible target URLs** - Supports custom target URLs via `--url` flag (default: 4 endpoints)
-- **PEM extraction** - Outputs unknown CA certificates in standard PEM format
-- **Complete DPI testing infrastructure** - Standalone server, mitmproxy, and Squid setups with cross-platform validation scripts
+- **Comprehensive behavioral analysis** - 10+ suspicious behavior indicators with confidence scoring
+- **CA impersonation detection** - Detects certificates falsely claiming to be from legitimate CAs
+- **DPI vendor identification** - Recognizes 15+ major enterprise security vendors
+- **Risk scoring system** - Combines multiple indicators for high-confidence detection
+
+**🛠️ Operational Features:**
+- **Flexible target URLs** - Supports custom URLs via `--url` flag (default: 4 endpoints)
+- **PEM extraction** - HawkScan-optimized certificate output format
+- **Complete DPI testing infrastructure** - Standalone server, mitmproxy, and Squid setups
 
 ## Project Structure
 
@@ -179,7 +186,7 @@ cypherhawk/
 | `hawkscan_integration_test.go` | HawkScan PEM compatibility tests - format validation, ordering, metadata |
 | `test_utils.go` | Test utilities including proxy environment cleanup to prevent test pollution |
 | `Makefile` | Build automation with CA bundle updates, cross-platform builds, and comprehensive testing |
-| `go.mod` | Go module definition with GitHub import path - zero external dependencies |
+| `go.mod` | Go module definition with minimal high-quality dependencies (go-retryablehttp, Cobra, Viper) |
 
 ## Testing Strategy
 

@@ -3,7 +3,9 @@
 
 A production-ready command-line tool that detects corporate Deep Packet Inspection (DPI) firewalls and man-in-the-middle (MitM) proxies, extracts their CA certificates, and provides comprehensive security analysis with advanced threat detection capabilities.
 
-CypherHawk features vendor identification for 15+ enterprise security platforms, behavioral analysis, Certificate Transparency validation, and HawkScan-optimized PEM output. Built by StackHawk but designed for the broader Java ecosystem including Maven, Gradle, Spring Boot applications, and security tools like HawkScan.
+**Enhanced with enterprise-grade architecture:** HashiCorp go-retryablehttp networking, Cobra CLI framework, structured logging, and configuration management. Features vendor identification for 15+ enterprise security platforms, behavioral analysis, Certificate Transparency validation, and HawkScan-optimized PEM output.
+
+Built by StackHawk but designed for the broader Java ecosystem including Maven, Gradle, Spring Boot applications, and security tools like HawkScan.
 
 ## Features
 
@@ -12,9 +14,11 @@ CypherHawk features vendor identification for 15+ enterprise security platforms,
 - **📋 Certificate Chain Analysis**: Detailed analysis of TLS certificate chains with anomaly detection
 - **🛡️ Security Validation**: Certificate Transparency validation, behavioral analysis, and CA impersonation detection
 - **📦 HawkScan Integration**: Optimized PEM output with comprehensive usage examples and custom help system
-- **⚡ Fast & Reliable**: Single binary with no dependencies, 10-second timeouts, retry logic, graceful error handling
+- **⚡ Fast & Reliable**: Enhanced networking with HashiCorp go-retryablehttp, exponential backoff, circuit breakers
+- **🔧 Professional CLI**: Cobra framework with subcommands, environment variables, structured logging
 - **🔒 Enterprise-Ready**: Supports 15+ major DPI vendors with confidence scoring and vendor identification
 - **🌐 Cross-Platform**: Comprehensive testing on Windows, macOS, Linux with proxy environment support
+- **📦 Modular Architecture**: High-quality dependencies with 50% code reduction and enhanced reliability
 
 ## Quick Start
 
@@ -35,16 +39,27 @@ make build  # Downloads latest CA bundle and builds binary
 ./cypherhawk
 
 # Test a specific website
-./cypherhawk -url https://example.com
+./cypherhawk --url https://example.com
+
+# Alternative subcommand syntax
+./cypherhawk detect https://example.com
+
+# Show version information
+./cypherhawk version
 
 # Show comprehensive help with HawkScan integration examples
 ./cypherhawk --help
 
-# Enable detailed security analysis
-./cypherhawk --verbose -url https://internal.company.com
+# Enable detailed security analysis with structured logging
+./cypherhawk --verbose --analyze --log-level debug
 
 # Save certificates to file
-./cypherhawk -o corporate-certs.pem -url https://internal.company.com
+./cypherhawk --output corporate-certs.pem --url https://internal.company.com
+
+# Environment variable configuration
+export CYPHERHAWK_OUTPUT=certs.pem
+export CYPHERHAWK_LOG_LEVEL=debug
+./cypherhawk
 ```
 
 ## Usage Examples
@@ -136,19 +151,32 @@ Chain Anomalies:
 ## Command Line Options
 
 ```
-Usage: ./cypherhawk [options]
+Usage: ./cypherhawk [command] [options]
+
+Commands:
+  detect          Detect corporate DPI and extract certificates (default)
+  version         Show version information
+  help            Show comprehensive help with HawkScan integration examples
 
 Options:
-  -h, --help            Show comprehensive help with HawkScan integration examples
-  -o string             Output file for CA certificates (use '-' for stdout)
-  -url string           Custom target URL to test (assumes https:// if no protocol specified)
-  -v, --verbose         Enable detailed security analysis output
-  --version             Show version information
+  -a, --analyze         Show comprehensive certificate chain analysis
+  -h, --help            Show help for command
+  -o, --output string   Output file for CA certificates (use '-' for stdout)
+  -q, --quiet           Suppress all non-error output
+  -u, --url string      Custom target URL to test (assumes https:// if no protocol specified)
+  -v, --verbose         Show detailed progress and security analysis
+      --silent          Suppress ALL output (even errors)
+      --log-level string Log level: debug, info, warn, error (default "info")
 
 Environment Variables:
-  HTTP_PROXY            HTTP proxy URL for corporate networks
-  HTTPS_PROXY           HTTPS proxy URL for corporate networks
-  CYPHERHAWK_SKIP_NETWORK_TESTS  Set to "1" to skip network tests (testing mode)
+  HTTP_PROXY                    HTTP proxy URL for corporate networks
+  HTTPS_PROXY                   HTTPS proxy URL for corporate networks
+  CYPHERHAWK_OUTPUT             Output file for CA certificates
+  CYPHERHAWK_URL                Custom target URL to test
+  CYPHERHAWK_VERBOSE            Enable verbose mode (true/false)
+  CYPHERHAWK_ANALYZE            Enable analysis mode (true/false)
+  CYPHERHAWK_LOG_LEVEL          Set log level (debug, info, warn, error)
+  CYPHERHAWK_SKIP_NETWORK_TESTS Set to "1" to skip network tests (testing mode)
 ```
 
 ## Integration with Java Applications
@@ -156,14 +184,20 @@ Environment Variables:
 ### StackHawk Scanner (HawkScan)
 ```bash
 # Extract corporate DPI certificates
-./cypherhawk -o corporate-certs.pem
+./cypherhawk --output corporate-certs.pem
 
 # Use with HawkScan
 hawk scan --ca-bundle corporate-certs.pem
 
 # For specific target testing
-./cypherhawk -url https://internal.corp.com -o corp-internal.pem
+./cypherhawk --url https://internal.corp.com --output corp-internal.pem
 hawk scan --ca-bundle corp-internal.pem
+
+# Using environment variables
+export CYPHERHAWK_OUTPUT=corporate-certs.pem
+export CYPHERHAWK_URL=https://internal.corp.com
+./cypherhawk
+hawk scan --ca-bundle corporate-certs.pem
 ```
 
 ### Java Applications (PEM format - Java 9+)
@@ -214,8 +248,8 @@ CypherHawk works by:
 
 1. **Fresh CA bundle at build time** - Downloads latest Mozilla CA certificates during build to prevent stale embedded fallback bundles
 2. **Runtime CA bundle download** - Downloads Mozilla's trusted CA bundle from multiple sources with cross-validation and integrity checking
-3. **Testing TLS connections** to default endpoints (or your custom URL) with retry logic and 10-second timeouts
-4. **Analyzing certificate chains** using browser-like validation logic with enhanced behavioral analysis
+3. **Enhanced TLS connections** - Uses HashiCorp go-retryablehttp with exponential backoff, circuit breakers, and corporate proxy support
+4. **Analyzing certificate chains** using browser-like validation logic with structured logging and enhanced behavioral analysis
 5. **Detecting unknown CAs** that aren't in Mozilla's trusted bundle using advanced threat detection
 6. **Performing security analysis** with Certificate Transparency validation, 10+ behavioral indicators, and CA impersonation detection
 7. **Vendor identification** using 15+ enterprise DPI vendor patterns with confidence scoring
