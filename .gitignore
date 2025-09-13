@@ -4,6 +4,7 @@
 .vscode
 
 # Build artifacts
+/dpi-test-server
 /cypherhawk
 cypherhawk-*
 *.pem

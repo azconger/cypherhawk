@@ -53,7 +53,7 @@ check: fmt-check vet lint
 	@echo "✅ All checks passed"
 
 # Pre-commit hook (runs checks + tests)
-pre-commit: check test
+pre-commit: fmt update-ca-bundle check test
 	@echo "✅ Pre-commit checks completed successfully"
 
 # Update CA bundle with latest Mozilla certificates
@@ -117,6 +117,8 @@ clean:
 	rm -f test-output.log
 	rm -f output.txt
 	rm -f errors.txt
+	rm -f coverage.out
+	rm -f coverage.html
 	@echo "✅ Build artifacts cleaned (including embedded CA bundle for fresh download)"
 
 # Install locally (for developers)
