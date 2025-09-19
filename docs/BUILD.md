@@ -17,7 +17,7 @@ cd cypherhawk
 make build
 
 # Test it works
-./cypherhawk --version
+./cypherhawk version
 ./cypherhawk --help
 ```
 
@@ -132,7 +132,7 @@ go install github.com/kaakaww/cypherhawk/cmd/cypherhawk@latest
 sha256sum -c cypherhawk-linux-amd64.sha256
 
 # Test functionality
-./cypherhawk --version
+./cypherhawk version
 ./cypherhawk --verbose -url https://www.google.com
 ```
 

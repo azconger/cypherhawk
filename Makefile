@@ -95,9 +95,11 @@ build-matrix:
 # Build binary for release with custom suffix (used by release workflow)
 build-release-binary:
 	@echo "Building $(BINARY_NAME) for release ($(GOOS)/$(GOARCH))..."
-	@LDFLAGS_TO_USE="$(LDFLAGS)"; \
-	if [ -n "$(CUSTOM_LDFLAGS)" ]; then LDFLAGS_TO_USE="$(CUSTOM_LDFLAGS)"; fi; \
-	$(GOFLAGS) GOOS=$(GOOS) GOARCH=$(GOARCH) go build $$LDFLAGS_TO_USE -o $(BINARY_NAME)-$(RELEASE_SUFFIX) ./cmd/cypherhawk
+ifdef CUSTOM_LDFLAGS
+	@$(GOFLAGS) GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(CUSTOM_LDFLAGS) -o $(BINARY_NAME)-$(RELEASE_SUFFIX) ./cmd/cypherhawk
+else
+	@$(GOFLAGS) GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LDFLAGS) -o $(BINARY_NAME)-$(RELEASE_SUFFIX) ./cmd/cypherhawk
+endif
 	@echo "✅ Built $(BINARY_NAME)-$(RELEASE_SUFFIX)"
 
 # Create checksum for a specific binary
@@ -114,7 +116,7 @@ build: update-ca-bundle check
 # Development with verbose output
 dev: build
 	@echo "Running CypherHawk in development mode..."
-	./$(BINARY_NAME) --version
+	./$(BINARY_NAME) version
 	./$(BINARY_NAME) --help
 
 # Run tests (default - includes all important tests)
@@ -231,7 +233,7 @@ verify: build-all
 		elif [[ "$$file" != *.sha256 ]]; then \
 			echo "🔍 Testing $$file..."; \
 			chmod +x "$$file"; \
-			if ./$$file --version >/dev/null 2>&1; then \
+			if ./$$file version >/dev/null 2>&1; then \
 				echo "✅ $$file - OK"; \
 			else \
 				echo "❌ $$file - FAILED"; \

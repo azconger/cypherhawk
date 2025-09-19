@@ -131,14 +131,14 @@ jobs:
       run: |
         chmod +x cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }}
         ./cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }} --help
-        ./cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }} --version
+        ./cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }} version
         echo "✅ Binary executes successfully on ${{ runner.os }}"
 
     - name: Test native binary execution (Windows)
       if: matrix.native && runner.os == 'Windows'
       run: |
         .\cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }}.exe --help
-        .\cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }}.exe --version
+        .\cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }}.exe version
         echo "✅ Binary executes successfully on Windows"
 
     - name: Verify cross-compiled binary exists
