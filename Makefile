@@ -1,5 +1,5 @@
 # CypherHawk - Cross-platform build automation
-.PHONY: build build-all clean test help install dev fmt fmt-check lint vet check pre-commit update-ca-bundle
+.PHONY: build build-all clean test help install dev fmt fmt-check lint vet check pre-commit update-ca-bundle mod-download mod-tidy-check build-matrix build-release-binary create-checksum
 
 # Build variables
 BINARY_NAME := cypherhawk
@@ -60,6 +60,51 @@ pre-commit: fmt update-ca-bundle check test
 update-ca-bundle:
 	@echo "Updating Mozilla CA bundle..."
 	@./scripts/update-ca-bundle.sh
+
+# Download Go dependencies
+mod-download:
+	@echo "Downloading Go dependencies..."
+	@go mod download
+	@echo "✅ Dependencies downloaded"
+
+# Check if go mod tidy would make changes (CI-friendly)
+mod-tidy-check:
+	@echo "Checking go mod tidy..."
+	@go mod tidy
+	@CHANGES=$$(git diff --name-only); \
+	if [ -n "$$CHANGES" ]; then \
+		echo "❌ go mod tidy made changes to tracked files:"; \
+		echo "$$CHANGES"; \
+		git diff; \
+		exit 1; \
+	else \
+		echo "✅ go mod tidy is clean - no changes to tracked files"; \
+	fi
+
+# Build binary for specific platform (used by CI matrix builds)
+build-matrix:
+	@echo "Building $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
+	@if [ "$(GOOS)" = "windows" ]; then \
+		EXT=".exe"; \
+	else \
+		EXT=""; \
+	fi; \
+	$(GOFLAGS) GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LDFLAGS) -o $(BINARY_NAME)-$(GOOS)-$(GOARCH)$$EXT ./cmd/cypherhawk
+	@echo "✅ Built $(BINARY_NAME)-$(GOOS)-$(GOARCH)"
+
+# Build binary for release with custom suffix (used by release workflow)
+build-release-binary:
+	@echo "Building $(BINARY_NAME) for release ($(GOOS)/$(GOARCH))..."
+	@LDFLAGS_TO_USE="$(LDFLAGS)"; \
+	if [ -n "$(CUSTOM_LDFLAGS)" ]; then LDFLAGS_TO_USE="$(CUSTOM_LDFLAGS)"; fi; \
+	$(GOFLAGS) GOOS=$(GOOS) GOARCH=$(GOARCH) go build $$LDFLAGS_TO_USE -o $(BINARY_NAME)-$(RELEASE_SUFFIX) ./cmd/cypherhawk
+	@echo "✅ Built $(BINARY_NAME)-$(RELEASE_SUFFIX)"
+
+# Create checksum for a specific binary
+create-checksum:
+	@echo "Creating checksum for $(BINARY_FILE)..."
+	@sha256sum $(BINARY_FILE) > $(BINARY_FILE).sha256
+	@echo "✅ Created checksum: $(BINARY_FILE).sha256"
 
 # Development build (current platform)
 build: update-ca-bundle check
@@ -212,6 +257,8 @@ help:
 	@echo "  make lint              Run staticcheck (if installed)"
 	@echo "  make check             Run all code quality checks (fmt-check + vet + lint)"
 	@echo "  make pre-commit        Run all checks + tests (recommended before commits)"
+	@echo "  make mod-download      Download Go dependencies"
+	@echo "  make mod-tidy-check    Check if go mod tidy would make changes (CI-friendly)"
 	@echo "  make update-ca-bundle  Download latest Mozilla CA bundle for embedding"
 	@echo ""
 	@echo "Build & Test:"
@@ -229,11 +276,14 @@ help:
 	@echo "  make run         Build and run with --verbose"
 	@echo "  make run-url     Build and test against Google"
 	@echo ""
-	@echo "Release:"
-	@echo "  make checksums   Create SHA256 checksums for all binaries"
-	@echo "  make package     Create release packages with checksums"
-	@echo "  make verify      Verify all binaries execute correctly"
-	@echo "  make help        Show this help"
+	@echo "CI/Release:"
+	@echo "  make build-matrix        Build for specific platform (GOOS/GOARCH env vars)"
+	@echo "  make build-release-binary Build with custom suffix (RELEASE_SUFFIX env var)"
+	@echo "  make create-checksum     Create checksum for specific binary (BINARY_FILE env var)"
+	@echo "  make checksums           Create SHA256 checksums for all binaries"
+	@echo "  make package             Create release packages with checksums"
+	@echo "  make verify              Verify all binaries execute correctly"
+	@echo "  make help                Show this help"
 	@echo ""
 	@echo "Current version: $(VERSION)"
 	@echo "Build time: $(BUILD_TIME)"

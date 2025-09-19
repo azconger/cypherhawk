@@ -31,32 +31,16 @@ jobs:
       run: make update-ca-bundle
 
     - name: Download dependencies
-      run: go mod download
+      run: make mod-download
 
     - name: Run go fmt check
-      run: |
-        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-          echo "Code is not properly formatted:"
-          gofmt -s -l .
-          exit 1
-        fi
+      run: make fmt-check
 
     - name: Run go vet
-      run: go vet ./...
+      run: make vet
 
     - name: Check go mod tidy
-      run: |
-        go mod tidy
-        # Check for changes to tracked files only (ignore coverage.out and other untracked files)
-        CHANGES=$(git diff --name-only)
-        if [ -n "$CHANGES" ]; then
-          echo "go mod tidy made changes to tracked files:"
-          echo "$CHANGES"
-          git diff
-          exit 1
-        else
-          echo "go mod tidy is clean - no changes to tracked files"
-        fi
+      run: make mod-tidy-check
 
     - name: Run tests
       run: make test
@@ -85,28 +69,14 @@ jobs:
         check-latest: true
 
     - name: Update CA bundle
-      run: |
-        chmod +x scripts/update-ca-bundle.sh
-        ./scripts/update-ca-bundle.sh
+      run: make update-ca-bundle
 
     - name: Build binary
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
         CGO_ENABLED: 0
-      run: |
-        echo "=== Debug: Current directory and contents ==="
-        pwd
-        ls -la
-        ls -la cmd/ || echo "cmd/ directory not found"
-        ls -la cmd/cypherhawk/ || echo "cmd/cypherhawk/ directory not found"
-        
-        if [ "${{ matrix.goos }}" = "windows" ]; then
-          EXT=".exe"
-        else
-          EXT=""
-        fi
-        go build -ldflags="-s -w" -o cypherhawk-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} ./cmd/cypherhawk
+      run: make build-matrix
 
     - name: Upload build artifact
       uses: actions/upload-artifact@v4

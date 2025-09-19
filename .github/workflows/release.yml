@@ -72,20 +72,14 @@ jobs:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
         CGO_ENABLED: 0
-      run: |
-        # Build with optimizations and version info
-        go build \
-          -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.version }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-          -o cypherhawk-${{ matrix.suffix }} \
-          ./cmd/cypherhawk
+        RELEASE_SUFFIX: ${{ matrix.suffix }}
+        CUSTOM_LDFLAGS: -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.version }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      run: make build-release-binary
 
     - name: Create checksum
-      run: |
-        if [[ "${{ matrix.goos }}" == "windows" ]]; then
-          sha256sum cypherhawk-${{ matrix.suffix }} > cypherhawk-${{ matrix.suffix }}.sha256
-        else
-          sha256sum cypherhawk-${{ matrix.suffix }} > cypherhawk-${{ matrix.suffix }}.sha256
-        fi
+      env:
+        BINARY_FILE: cypherhawk-${{ matrix.suffix }}
+      run: make create-checksum
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
